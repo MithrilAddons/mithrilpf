@@ -1,0 +1,64 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
+    id 'com.diffplug.spotless' version '8.10.2'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    mavenCentral()
+    maven {
+        url = 'https://maven.terraformersmc.com/releases/'
+        content { includeGroup 'com.terraformersmc' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
+    compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:${project.kotlin_version}"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 } }
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+
+spotless {
+    kotlin {
+        target 'src/**/*.kt'
+        ktfmt('0.64').kotlinlangStyle()
+    }
+    format 'supportFiles', {
+        target '*.md', '*.gradle', '*.properties', '.editorconfig', '.gitignore', '.gitattributes',
+            'docs/**/*.md', '.github/**/*.yml', '.github/**/*.md', 'tools/**/*.py'
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+tasks.withType(Test).configureEach {
+    useJUnit()
+    environment 'APPDATA', layout.buildDirectory.dir('test-home/appdata').get().asFile.absolutePath
+    environment 'LOCALAPPDATA', layout.buildDirectory.dir('test-home/localappdata').get().asFile.absolutePath
+    environment 'HYPIXEL_API_KEY', ''
+    systemProperty 'user.home', layout.buildDirectory.dir('test-home').get().asFile.absolutePath
+    testLogging { events 'failed', 'skipped'; exceptionFormat = 'full' }
+}
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+jar { from('THIRD_PARTY_NOTICES.md') { into 'META-INF' } }
