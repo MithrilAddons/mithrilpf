@@ -1,0 +1,21 @@
+{
+  "key.category.mithrilpf.main": "MithrilPF",
+  "key.mithrilpf.open": "Open MithrilPF",
+  "screen.mithrilpf.title": "MithrilPF",
+  "screen.mithrilpf.party_finder": "Party finder",
+  "screen.mithrilpf.development": "In development.",
+  "screen.mithrilpf.website": "mithril.foo/party-finder",
+  "screen.mithrilpf.link": "Link browser",
+  "screen.mithrilpf.open_website": "Open website",
+  "screen.mithrilpf.relink": "Link another browser",
+  "screen.mithrilpf.link.checking": "Checking saved account…",
+  "screen.mithrilpf.link.linked": "Linked as %s",
+  "screen.mithrilpf.link.linked_offline": "Linked as %s (status unavailable)",
+  "screen.mithrilpf.link.unavailable": "Link status unavailable. Retrying…",
+  "screen.mithrilpf.link.expired": "Browser session ended. Link again.",
+  "screen.mithrilpf.link.storage_failed": "Saved link could not be read. Check config.",
+  "screen.mithrilpf.link.ready": "Sign in to the website with Minecraft.",
+  "screen.mithrilpf.link.busy": "Verifying account…",
+  "screen.mithrilpf.link.opened": "Confirm your account in the browser.",
+  "screen.mithrilpf.link.failed": "Could not verify account. Please try again."
+}
