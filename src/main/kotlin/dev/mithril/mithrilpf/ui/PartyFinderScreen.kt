@@ -16,6 +16,16 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
         panel = PanelLayout.fit(width, height)
         browserLink.show()
         val buttonWidth = (panel.width - 24).coerceAtLeast(1)
+        addRenderableWidget(
+            FlatButton(
+                panel.x + 12,
+                panel.y + panel.height - 108,
+                buttonWidth,
+                Component.translatable("tracking.mithrilpf.title"),
+            ) {
+                minecraft.setScreen(TrackingScreen(this))
+            }
+        )
         linkButton =
             addRenderableWidget(
                 FlatButton(
@@ -105,7 +115,7 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
     }
 
     private fun line(g: GuiGraphicsExtractor, text: Component, offset: Int, color: Int) {
-        if (offset + 10 > panel.height - (if (browserLink.linked) 90 else 64)) return
+        if (offset + 10 > panel.height - 116) return
         g.text(
             font,
             Language.getInstance()

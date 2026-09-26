@@ -1,42 +1,32 @@
-# Verification
+# Testing
 
-Run `gradlew.bat spotlessApply` (Linux: `sh gradlew spotlessApply`), then
-`python tools/check.py`. The latter checks wrapper integrity, duplicate JSON keys,
-branch-policy tests, build/format/JVM tests, and finished-JAR metadata/entrypoints.
-These packaging rules are regression guards, not a malware scanner or proof of safety.
-Dependencies may download during the build; tests make no live service requests.
+Run `gradlew.bat spotlessApply` (`sh gradlew spotlessApply` on Linux), then
+`python tools/check.py`. The script verifies wrapper integrity, JSON keys,
+branch policy, formatting, JVM tests and packaged-JAR metadata/entrypoints.
+Only the reviewed DungeonConnectionMixin packet hook is allowed. Its class and
+the adapted code's CC0 notice must be present in the JAR.
 
-JVM tests use temporary directories and redirected user.home/APPDATA/LOCALAPPDATA.
-Do not introduce tests that read actual accounts, Minecraft sessions, or shared config.
-CI uses pinned actions, read-only permissions, no checkout credentials, wrapper
-validation, timeouts, and Ubuntu/Windows builds. Reports and both tested artifacts
-are retained for 14 days. It does not deploy or install anything.
+Tests use temporary directories and redirected user directories, never live
+accounts or configuration. CI runs the same checks on Windows and Linux with
+read-only permissions, pinned actions and no deployment credentials. Required jobs
+are `Verify (ubuntu-24.04)` and `Verify (windows-2025)`.
+Build/package guards are not malware scanning or proof of runtime correctness.
 
-Required CI job names, once first observed, are `Verify (ubuntu-24.04)` and
-`Verify (windows-2025)`. Changing repository rules is a separate authorized action.
+## Manual regression checks
 
-## Manual Minecraft checklist
-
-- [ ] Launch 26.1.2 with only required dependencies; no other Mithril mod required.
-- [ ] `/mithrilpf` opens after chat closes; Escape/Done returns to gameplay.
-- [ ] Assign and test Open MithrilPF in Controls; it starts unbound to avoid conflicts.
-- [ ] Open via optional Mod Menu; Escape/Done returns to Mod Menu.
-- [ ] Charcoal/periwinkle panel, light primary action, neutral secondary action,
-      hover and keyboard focus; Tab/Enter activates buttons.
-- [ ] GUI scale 1/3/auto, window resize/fullscreen, resource-pack font reload.
-- [ ] Link browser verifies the correct Minecraft account and opens mithril.foo.
-- [ ] Explicitly confirm in browser; remembered login survives browser restart.
-- [ ] Used/expired links fail; logout revokes the browser session.
-- [ ] Close screen during verification: no late browser opening.
-- [ ] Offline/unavailable service fails visibly and permits retry.
-- [ ] With no saved link, no network before clicking Link browser; no custom helper,
-      automation, or recording. Saved receipts are checked only while the menu is open.
-- [ ] Confirm browser link: menu changes to Linked as / Open website; reopen menu
-      and restart Minecraft to verify persistence. Switch accounts: no shared link state.
-- [ ] Logout/expiry clears the linked state; offline checks keep it with an unavailable label.
-- [ ] Link another browser remains available; receipt alone cannot sign in anywhere.
-- [ ] Text shadow toggle absent; old config left untouched.
-
-Compilation is not a runtime or visual test. Do not claim in-game verification or
-performance improvements without doing and recording those checks. Do not install
-into the owner's dungeons/practice instances unless explicitly requested.
+- Launch with only required dependencies; also check optional Mod Menu.
+- Open/close the menu using command, keybind and Mod Menu; check keyboard focus,
+  GUI scaling, resizing and resource-pack fonts.
+- Link the correct browser account; verify remembered state, restart, expiry,
+  logout, cancelled/expired links, account changes and service outages.
+- Test HUD movement/scaling and settings persistence without creating preview PBs.
+- Enter a fresh dungeon: verify floor/roster detection, split boundaries, real/tick
+  clocks during lag, normal/master separation and abandoned-run handling.
+- Clear a room, leave, return for secrets: only time in that room counts.
+- Compare solo 300-score detection against server observations with and without
+  Paul; test death and teammate invalidation. The owner confirmed successful
+  live 300-score detection on 2026-09-26; that is not coverage of every modifier.
+- Complete qualifying runs and verify history, three-sample estimates and fallback.
+Keep session-specific results and outstanding test notes local. State clearly
+which checks were automated and which were performed in Minecraft; compilation
+alone does not establish gameplay accuracy or performance.

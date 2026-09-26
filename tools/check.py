@@ -33,8 +33,13 @@ def verify_jar(path):
         expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
         if set(metadata["depends"]) != expected:
             raise ValueError("Unexpected required dependency; review this policy explicitly")
-        if metadata.get("mixins") or metadata.get("jars"):
-            raise ValueError("Foundation must not add mixins or embedded dependencies")
+        if metadata.get("mixins") != ["mithrilpf.mixins.json"] or metadata.get("jars"):
+            raise ValueError("Unexpected mixin configuration or embedded dependency")
+        mixins = json.loads(jar.read("mithrilpf.mixins.json"))
+        if mixins["client"] != ["DungeonConnectionMixin"]:
+            raise ValueError("Unexpected packet hooks; explicit review required")
+        jar.read("dev/mithril/mithrilpf/mixin/DungeonConnectionMixin.class")
+        jar.read("META-INF/licenses/LICENSE_noamm")
         for entries in metadata["entrypoints"].values():
             for entry in entries:
                 if entry["value"].replace(".", "/") + ".class" not in jar.namelist():

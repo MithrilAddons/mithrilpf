@@ -11,6 +11,7 @@
   },
   "license": "All-Rights-Reserved",
   "environment": "client",
+  "mixins": ["mithrilpf.mixins.json"],
   "entrypoints": {
     "client": [{"adapter": "kotlin", "value": "dev.mithril.mithrilpf.MithrilPF"}],
     "modmenu": [{"adapter": "kotlin", "value": "dev.mithril.mithrilpf.compat.ModMenuIntegration"}]
