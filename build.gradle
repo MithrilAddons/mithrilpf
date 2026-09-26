@@ -37,6 +37,23 @@ java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()
 }
+sourceSets {
+    updater {}
+    test {
+        compileClasspath += sourceSets.updater.output
+        runtimeClasspath += sourceSets.updater.output
+    }
+}
+tasks.register('updaterJar', Jar) {
+    from sourceSets.updater.output
+    archiveFileName = 'updater.jar'
+    destinationDirectory = layout.buildDirectory.dir('updater')
+    manifest { attributes 'Main-Class': 'dev.mithril.mithrilpf.update.UpdateInstaller' }
+}
+processResources {
+    from(tasks.named('updaterJar')) { into 'assets/mithrilpf' }
+}
+sourcesJar { from sourceSets.updater.allSource }
 kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 } }
 tasks.withType(JavaCompile).configureEach { options.release = 25 }
 

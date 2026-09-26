@@ -15,6 +15,14 @@ Build/package guards are not malware scanning or proof of runtime correctness.
 
 ## Manual regression checks
 
+- Updates: test with disposable instances first. Check stable-only and pre-release
+  selection, turn updates off during/after download, quit normally and verify the
+  new internal version plus backup. Test locked/read-only targets and an interrupted
+  quit. The helper must not replace a changed installed/staged file or run downloads.
+  Automated tests use synthetic releases, temporary directories and harmless Java
+  child processes; they do not access GitHub, real credentials or the user's mods.
+  Real Minecraft restart and launcher behavior still need manual verification.
+
 - Launch with only required dependencies; also check optional Mod Menu.
 - Open/close the menu using command, keybind and Mod Menu; check keyboard focus,
   GUI scaling, resizing and resource-pack fonts.

@@ -40,7 +40,7 @@ gradlew.bat runClient
 
 Linux: use `sh gradlew`. The development client uses the disposable `run/`
 directory. The gameplay artifact is `build/libs/mithrilpf-<mod_version>.jar`; the sources
-JAR is not installable. No installer or updater is included.
+JAR is not installable. The updater is disabled for development/class-directory launches.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) and [TESTING.md](TESTING.md).
 
 Keep Kotlin feature logic separate from thin Java mixins. Client state belongs
@@ -84,6 +84,44 @@ and generated notes. Prerelease tags are marked accordingly. A maintainer review
 the notes and performs the manual tests before publishing the draft. Never move an
 existing release tag; fix forward with a new version. Local untagged builds do not
 create releases, and uploading artifacts to Modrinth is not part of this workflow.
+
+## Automatic updates
+
+Open `/mpf → Updates`. Auto-update defaults on; **Include pre-releases** defaults
+off. Each game launch checks GitHub; Check now retries at most once per minute.
+Checks/downloads run on a background worker. No GitHub login or Minecraft token
+is sent. With pre-releases off, only the latest published stable release is
+considered. With it on, the newest 50 published releases are searched by semantic
+version (up to five newer candidates inspected). Drafts, equal/older versions,
+missing checksums and incompatible Minecraft/dependency requirements are rejected.
+Turning either toggle off cancels an in-progress/staged update as appropriate;
+it never downgrades an already-installed beta.
+
+Downloads are restricted to this repository's HTTPS GitHub release URLs and
+GitHub's release-asset host, with redirect, size and time limits. The SHA-256
+digest comes from GitHub's release API. This protects integrity but is **not**
+an independent signature or protection against a compromised GitHub publisher.
+The updater never updates Minecraft, Fabric, Kotlin or any other mod.
+
+A ready update is installed only after quitting Minecraft, by a tiny JDK-only
+helper extracted from the running mod. It uses the same Java installation, waits
+up to two minutes for the exact parent process to exit, then rechecks both old and
+new hashes. The previous JAR is retained under
+`config/mithrilpf/updates/backups/<sha256>.jar.backup`. Replacement is atomic;
+unsupported filesystems, locks or changed files leave the installed JAR alone.
+The existing JAR filename is deliberately preserved to avoid duplicate-mod or
+missing-mod windows; its internal version changes. Wait a few seconds after quit
+before relaunching. No PowerShell, registry changes, startup service or administrator
+rights are used. Symlinked/nonstandard installations require manual updates.
+
+Settings are in `config/mithrilpf/updates.json`; malformed/newer schemas are
+not overwritten and disable installation. Staging and helper logs are confined to
+`config/mithrilpf/updates/job-*`. Crashes may leave unused staging folders; they
+are not automatically installed on the next launch. Backups are retained until
+you remove them. To roll back with Minecraft closed, disable auto-update in
+updates.json, copy a backup over the installed MithrilPF JAR and relaunch.
+The first updater-enabled build must be installed manually; older releases cannot
+gain this feature without an update.
 
 Dungeon tracking provides split/real-tick timers, room clear/secrets PBs, F7/M7
 solo 300-score PBs, run history and estimated finish times. `/mithrilpfpbs` shows

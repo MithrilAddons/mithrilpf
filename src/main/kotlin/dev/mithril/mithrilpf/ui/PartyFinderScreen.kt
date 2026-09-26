@@ -22,10 +22,20 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
             FlatButton(
                 panel.x + 12,
                 panel.y + panel.height - 108,
-                buttonWidth,
+                (buttonWidth - 6) / 2,
                 Component.translatable("tracking.mithrilpf.title"),
             ) {
                 minecraft.setScreen(TrackingScreen(this))
+            }
+        )
+        addRenderableWidget(
+            FlatButton(
+                panel.x + 12 + (buttonWidth - 6) / 2 + 6,
+                panel.y + panel.height - 108,
+                (buttonWidth - 6) / 2,
+                Component.translatable("update.mithrilpf.title"),
+            ) {
+                minecraft.setScreen(UpdateScreen(this, MithrilPF.updates))
             }
         )
         linkButton =

@@ -1,6 +1,7 @@
 """Local/CI verification. Does not launch Minecraft, install a mod, or contact game services."""
 
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -48,6 +49,10 @@ def verify_jar(path):
             raise ValueError("Only the reviewed local QR generator may be embedded")
         jar.read("META-INF/jars/qrcodegen-1.8.0.jar")
         jar.read("META-INF/licenses/LICENSE_qrcodegen")
+        with zipfile.ZipFile(io.BytesIO(jar.read("assets/mithrilpf/updater.jar"))) as helper:
+            helper.read("dev/mithril/mithrilpf/update/UpdateInstaller.class")
+            if helper.read("META-INF/licenses/LICENSE_mithrilpf") != (ROOT / "LICENSE").read_bytes():
+                raise ValueError("Updater license mismatch")
         mixins = json.loads(jar.read("mithrilpf.mixins.json"))
         if mixins["client"] != ["DungeonConnectionMixin"]:
             raise ValueError("Unexpected packet hooks; explicit review required")
