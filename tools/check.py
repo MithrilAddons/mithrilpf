@@ -31,6 +31,10 @@ def verify_jar(path):
             raise ValueError("Incorrect mod identity")
         if metadata.get("license") != "MIT":
             raise ValueError("Incorrect project license")
+        if metadata.get("icon") != "assets/mithrilpf/icon.png":
+            raise ValueError("Missing mod icon reference")
+        if jar.read(metadata["icon"]) != (ROOT / "src/main/resources" / metadata["icon"]).read_bytes():
+            raise ValueError("Packaged mod icon differs from the source asset")
         if jar.read("META-INF/licenses/LICENSE_mithrilpf") != (ROOT / "LICENSE").read_bytes():
             raise ValueError("Packaged project license is missing or differs from LICENSE")
         if "${" in metadata["version"]:

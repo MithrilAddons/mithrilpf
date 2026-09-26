@@ -3,6 +3,7 @@
   "id": "mithrilpf",
   "version": "${version}",
   "name": "MithrilPF",
+  "icon": "assets/mithrilpf/icon.png",
   "description": "Dungeon party finder client. In development.",
   "authors": ["mithril"],
   "contact": {
