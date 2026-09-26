@@ -23,6 +23,10 @@ class ModUpdates(private val client: Minecraft) : AutoCloseable {
                 if (loader.isDevelopmentEnvironment) null
                 else container.origin.paths.singleOrNull(),
                 { javaClass.getResourceAsStream("/assets/mithrilpf/updater.jar") },
+                UpdateDistribution.official(
+                    javaClass.getResourceAsStream("/assets/mithrilpf/build.properties"),
+                    container.metadata.version.friendlyString,
+                ),
             )
         service =
             UpdateService(environment, { work -> client.execute(work) }, UpdateHttp()::get) { update

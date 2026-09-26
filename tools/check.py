@@ -40,6 +40,18 @@ def verify_jar(path):
                                 if line.startswith("mod_version="))
         if metadata["version"] != expected_version or path.name != f"mithrilpf-{expected_version}.jar":
             raise ValueError("Packaged version or filename does not match gradle.properties")
+        distribution = dict(line.split("=", 1) for line in
+                            jar.read("assets/mithrilpf/build.properties").decode().splitlines()
+                            if line and not line.startswith("#"))
+        release_build = (os.environ.get("GITHUB_ACTIONS") == "true"
+                         and os.environ.get("GITHUB_REPOSITORY") == "MithrilAddons/mithrilpf"
+                         and os.environ.get("GITHUB_EVENT_NAME") == "push"
+                         and os.environ.get("GITHUB_REF_TYPE") == "tag"
+                         and os.environ.get("GITHUB_REF_NAME") == f"v{expected_version}"
+                         and os.environ.get("GITHUB_WORKFLOW") == "Release")
+        if distribution != {"version": expected_version,
+                            "officialRelease": str(release_build).lower()}:
+            raise ValueError("Incorrect updater distribution marker")
         expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
         if set(metadata["depends"]) != expected:
             raise ValueError("Unexpected required dependency; review this policy explicitly")

@@ -88,7 +88,13 @@ create releases, and uploading artifacts to Modrinth is not part of this workflo
 ## Automatic updates
 
 Open `/mpf → Updates`. Auto-update defaults on; **Include pre-releases** defaults
-off. Each game launch checks GitHub; Check now retries at most once per minute.
+off. Only JARs built by this repository's tagged **Release** workflow can self-update.
+Local builds and PR artifacts are marked local: they never check, download or install
+updates, even if a newer remote version exists. This protects local commits/dirty
+changes without relying on developers to bump the version. Missing/mismatched build
+markers also disable updating. Install an official release JAR to return to automatic
+updates. The marker identifies the distribution channel; it is not a signature.
+Each official-build launch checks GitHub; Check now retries at most once per minute.
 Checks/downloads run on a background worker. No GitHub login or Minecraft token
 is sent. With pre-releases off, only the latest published stable release is
 considered. With it on, the newest 50 published releases are searched by semantic

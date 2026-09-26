@@ -22,6 +22,7 @@ internal data class UpdateEnvironment(
     val installed: Map<String, String>,
     val origin: Path?,
     val helper: () -> InputStream?,
+    val officialRelease: Boolean,
 )
 
 /** Client-thread state; one worker owns files/network. Tests inject delivery and transport. */
@@ -90,6 +91,10 @@ internal class UpdateService(
                 val settings = store.load()
                 loaded = true
                 publish(token) { status = UpdateStatus(settings, true, "checking") }
+                if (!environment.officialRelease) {
+                    publish(token) { status = UpdateStatus(settings, true, "local") }
+                    return@submit
+                }
                 if (!settings.enabled) {
                     publish(token) { status = UpdateStatus(settings, true, "disabled") }
                     return@submit
@@ -193,6 +198,7 @@ internal class UpdateService(
         ++generation
         task?.cancel(true)
         worker.shutdownNow()
+        if (!environment.officialRelease) return
         val update = pending ?: return
         if (!status.settings.enabled || (update.version.prerelease && !status.settings.prereleases))
             return

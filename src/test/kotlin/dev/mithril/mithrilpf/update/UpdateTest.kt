@@ -210,6 +210,9 @@ class UpdateTest {
                             .toByteArray()
                     )
                     it.closeEntry()
+                    it.putNextEntry(ZipEntry("assets/mithrilpf/build.properties"))
+                    it.write("version=1.0.0\nofficialRelease=true\n".toByteArray())
+                    it.closeEntry()
                 }
             }
             fun artifact() =

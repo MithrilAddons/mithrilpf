@@ -30,6 +30,16 @@ object UpdateArtifact {
             "Update checksum mismatch"
         }
         ZipFile(path.toFile()).use { zip ->
+            require(
+                UpdateDistribution.official(
+                    zip.getEntry("assets/mithrilpf/build.properties")?.let {
+                        zip.getInputStream(it)
+                    },
+                    release.version.text,
+                )
+            ) {
+                "Update is not a release build"
+            }
             val entry = requireNotNull(zip.getEntry("fabric.mod.json"))
             val bytes = zip.getInputStream(entry).use { it.readNBytes(65537) }
             require(bytes.size <= 65536)

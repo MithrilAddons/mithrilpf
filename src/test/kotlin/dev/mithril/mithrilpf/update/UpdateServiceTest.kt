@@ -31,12 +31,17 @@ class UpdateServiceTest {
                         .toByteArray()
                 )
                 it.closeEntry()
+                it.putNextEntry(ZipEntry("assets/mithrilpf/build.properties"))
+                it.write("version=0.3.0-beta.1\nofficialRelease=true\n".toByteArray())
+                it.closeEntry()
             }
             UpdateSettingsStore(root.resolve("config/mithrilpf/updates.json"))
                 .save(UpdateSettings(true, true))
         }
 
-        fun start(block: (() -> Unit)? = null): UpdateService {
+        var requests = 0
+
+        fun start(official: Boolean = true, block: (() -> Unit)? = null): UpdateService {
             val bytes = Files.readAllBytes(artifact)
             val hash = UpdateArtifact.hash(artifact)
             val release =
@@ -48,9 +53,11 @@ class UpdateServiceTest {
                         mapOf("minecraft" to "26.1.2", "java" to "25", "fabricloader" to "0.19.3"),
                         installed,
                         { ByteArrayInputStream(byteArrayOf(1, 2)) },
+                        official,
                     ),
                     { queue.add(it) },
                     { uri, _ ->
+                        requests++
                         when {
                             uri.path.endsWith("/latest") -> "[]".toByteArray()
                             uri.host == "api.github.com" -> release.toByteArray()
@@ -80,6 +87,19 @@ class UpdateServiceTest {
             root.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun localBuildNeverContactsRemoteOrLaunchesInstaller() =
+        Harness().use { h ->
+            val service = h.start(official = false)
+            h.await("local")
+            service.configure(UpdateSettings(true, true))
+            h.await("local")
+            service.close()
+            assertEquals(0, h.requests)
+            assertNull(h.launched)
+            assertEquals("synthetic old mod", Files.readString(h.installed))
+        }
 
     @Test
     fun stagesButDoesNotInstallUntilClose() =

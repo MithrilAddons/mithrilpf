@@ -11,6 +11,7 @@
   "update.mithrilpf.current": "No newer release on this update channel.",
   "update.mithrilpf.disabled": "Automatic updates are off.",
   "update.mithrilpf.unsupported": "Automatic installation requires a regular JAR in this instance's mods folder.",
+  "update.mithrilpf.local": "Local build — auto-updates are disabled to protect your local changes.",
   "update.mithrilpf.incompatible": "Newer releases need a different Minecraft version or dependencies.",
   "update.mithrilpf.failed": "Update check failed. Try again later (at least 1 minute).",
   "update.mithrilpf.storage_error": "Update settings could not be read or saved. No update will be installed.",

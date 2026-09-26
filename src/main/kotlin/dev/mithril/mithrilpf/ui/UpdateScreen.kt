@@ -57,7 +57,7 @@ class UpdateScreen(private val parent: Screen, private val updates: ModUpdates) 
             .active =
             shown.loaded &&
                 shown.settings.enabled &&
-                shown.state !in setOf("checking", "downloading", "ready")
+                shown.state !in setOf("checking", "downloading", "ready", "local")
         addRenderableWidget(
             FlatButton(
                 panel.x + 12,

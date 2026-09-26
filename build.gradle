@@ -28,9 +28,20 @@ dependencies {
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit:${project.kotlin_version}"
 }
 
+def officialRelease = System.getenv('GITHUB_ACTIONS') == 'true' &&
+    System.getenv('GITHUB_REPOSITORY') == 'MithrilAddons/mithrilpf' &&
+    System.getenv('GITHUB_EVENT_NAME') == 'push' &&
+    System.getenv('GITHUB_REF_TYPE') == 'tag' &&
+    System.getenv('GITHUB_REF_NAME') == "v${project.version}" &&
+    System.getenv('GITHUB_WORKFLOW') == 'Release'
+
 processResources {
     inputs.property 'version', project.version
+    inputs.property 'officialRelease', officialRelease
     filesMatching('fabric.mod.json') { expand version: project.version }
+    filesMatching('assets/mithrilpf/build.properties') {
+        expand version: project.version, officialRelease: officialRelease
+    }
 }
 
 java {
