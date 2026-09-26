@@ -45,5 +45,10 @@
   "tracking.mithrilpf.blood_camp": "Blood Camp",
   "tracking.mithrilpf.wither_king": "Wither King",
   "tracking.mithrilpf.estimate": "Estimated Run Time:",
-  "tracking.mithrilpf.lag": "Lag Lost:"
+  "tracking.mithrilpf.lag": "Lag Lost:",
+  "screen.mithrilpf.sync.waiting": "Record sync: waiting",
+  "screen.mithrilpf.sync.no_records": "Record sync: no PBs yet",
+  "screen.mithrilpf.sync.unlinked": "Record sync: link your browser first",
+  "screen.mithrilpf.sync.synced": "Record sync: up to date",
+  "screen.mithrilpf.sync.unavailable": "Record sync: unavailable, retrying"
 }

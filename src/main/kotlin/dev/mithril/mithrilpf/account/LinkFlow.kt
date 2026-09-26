@@ -6,32 +6,34 @@ import java.net.URI
 
 /** No Minecraft access token enters this protocol. Ownership proof goes only to Mojang. */
 class LinkFlow(private val post: (String, JsonObject) -> String) {
-    fun run(uuid: String, name: String, proveOwnership: (String) -> Unit): IssuedLink {
-        require(uuid.matches(Regex("[0-9a-f]{32}")))
-        require(name.matches(Regex("[A-Za-z0-9_]{1,16}")))
-        val challenge =
-            parse(
-                post(
-                    "challenge",
-                    JsonObject().apply {
-                        addProperty("version", 1)
-                        addProperty("uuid", uuid)
-                        addProperty("name", name)
-                    },
+    fun run(uuid: String, name: String, proveOwnership: (String) -> Unit): IssuedLink =
+        OwnershipProof.serialized {
+            require(uuid.matches(Regex("[0-9a-f]{32}")))
+            require(name.matches(Regex("[A-Za-z0-9_]{1,16}")))
+            val challenge =
+                parse(
+                    post(
+                        "challenge",
+                        JsonObject().apply {
+                            addProperty("version", 1)
+                            addProperty("uuid", uuid)
+                            addProperty("name", name)
+                        },
+                    )
                 )
+            val id = token(challenge, "challenge_id")
+            val serverId = challenge.get("server_id")?.asString ?: error("Missing challenge")
+            require(serverId.matches(Regex("[0-9a-f]{39}")))
+            check(!Thread.currentThread().isInterrupted)
+            proveOwnership(serverId)
+            check(!Thread.currentThread().isInterrupted)
+            val verified =
+                parse(post("verify", JsonObject().apply { addProperty("challenge_id", id) }))
+            IssuedLink(
+                URI("https://mithril.foo/link#${token(verified, "link_token")}"),
+                if (verified.has("receipt_token")) token(verified, "receipt_token") else null,
             )
-        val id = token(challenge, "challenge_id")
-        val serverId = challenge.get("server_id")?.asString ?: error("Missing challenge")
-        require(serverId.matches(Regex("[0-9a-f]{39}")))
-        check(!Thread.currentThread().isInterrupted)
-        proveOwnership(serverId)
-        check(!Thread.currentThread().isInterrupted)
-        val verified = parse(post("verify", JsonObject().apply { addProperty("challenge_id", id) }))
-        return IssuedLink(
-            URI("https://mithril.foo/link#${token(verified, "link_token")}"),
-            if (verified.has("receipt_token")) token(verified, "receipt_token") else null,
-        )
-    }
+        }
 
     fun status(receipt: String, uuid: String): String {
         require(receipt.matches(Regex("[A-Za-z0-9_-]{43}")))

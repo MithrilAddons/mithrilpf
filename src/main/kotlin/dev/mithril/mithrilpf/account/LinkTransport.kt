@@ -13,20 +13,33 @@ import java.util.concurrent.Flow
 object LinkTransport {
     fun post(path: String, body: JsonObject): String {
         require(path in setOf("challenge", "verify", "link-status"))
+        return request("auth/$path", body, null)
+    }
+
+    fun syncPost(path: String, body: JsonObject, token: String?): String {
+        require(path in setOf("sync-challenge", "sync-verify", "sync-records"))
+        require((path == "sync-records") == (token != null))
+        if (token != null) require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return request("auth/$path", body, token)
+    }
+
+    private fun request(path: String, body: JsonObject, token: String?): String {
+        require(body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build()
             .use { client ->
                 val request =
-                    HttpRequest.newBuilder(URI("https://mithril.foo/api/v1/auth/$path"))
+                    HttpRequest.newBuilder(URI("https://mithril.foo/api/v1/$path"))
                         .timeout(Duration.ofSeconds(12))
                         .header("Content-Type", "application/json")
                         .header("Accept", "application/json")
+                        .apply { if (token != null) header("Authorization", "Bearer $token") }
                         .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                         .build()
                 val response = client.send(request) { BoundedBody() }
-                check(response.statusCode() == 200) { "Account service unavailable" }
+                if (response.statusCode() != 200) throw ServiceFailure(response.statusCode())
                 return response.body()
             }
     }
@@ -61,3 +74,5 @@ object LinkTransport {
         override fun onComplete() = delegate.onComplete()
     }
 }
+
+class ServiceFailure(val statusCode: Int) : Exception("Mithril service unavailable")

@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.ui
 
+import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.account.BrowserLink
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -110,7 +111,12 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
                 else -> Palette.MUTED
             },
         )
-        line(g, Component.translatable("screen.mithrilpf.website"), 94, Palette.ACCENT)
+        line(
+            g,
+            Component.translatable("screen.mithrilpf.sync.${MithrilPF.syncStatus}"),
+            94,
+            Palette.MUTED,
+        )
         super.extractRenderState(g, mouseX, mouseY, delta)
     }
 

@@ -54,3 +54,17 @@ Settings, per-account PBs and run history live under `config/mithrilpf/`.
 Malformed/newer settings are not overwritten; unknown fields survive edits.
 PB files discourage casual manual edits but are not tamper-proof. Back up this
 directory to retain records. No old MithrilAddons data is imported automatically.
+
+## Record syncing
+
+While linked, a bounded worker uploads account-wide F7/M7 solo-clear and terminal
+PBs to the same website. A fresh Mojang ownership proof obtains a 15-minute,
+upload-only credential; browser logout/expiry revokes it. Credentials stay in
+memory. Linking and syncing serialize their ownership proofs. Uploads use an
+immutable client-thread snapshot, retry after outages and never send full run
+history, room records or Minecraft access tokens to the website.
+
+The menu shows sync status. The server merges independent real/tick minimums,
+so slower or repeated uploads cannot replace PBs. See the web repository's
+[API contract](https://github.com/MithrilAddons/web/blob/main/docs/API.md) and
+the synthetic `src/test/resources/contracts/mod-records-v1.json` fixture.
