@@ -9,7 +9,7 @@
     "homepage": "https://mithril.foo/party-finder",
     "sources": "https://github.com/MithrilAddons/mithrilpf"
   },
-  "license": "All-Rights-Reserved",
+  "license": "MIT",
   "environment": "client",
   "mixins": ["mithrilpf.mixins.json"],
   "entrypoints": {

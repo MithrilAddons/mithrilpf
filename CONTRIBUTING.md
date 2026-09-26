@@ -17,5 +17,6 @@ inside compat; the mod must load without it. New required dependencies, mixins,
 network destinations, and security-sensitive code need explicit review.
 
 No framework, license, telemetry, or broad cleanup as a side effect of a feature.
-Metadata retains All-Rights-Reserved pending the owner's distribution-license
-decision; this setup does not grant third-party relicensing permission.
+Original MithrilPF code is licensed under MIT (see LICENSE). Contributions must
+be submitted under the same license, with third-party provenance and notices
+preserved. Do not submit code you lack permission to contribute.
