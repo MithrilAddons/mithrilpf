@@ -1,6 +1,7 @@
 """Local/CI verification. Does not launch Minecraft, install a mod, or contact game services."""
 
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -39,6 +40,18 @@ def verify_jar(path):
                                 if line.startswith("mod_version="))
         if metadata["version"] != expected_version or path.name != f"mithrilpf-{expected_version}.jar":
             raise ValueError("Packaged version or filename does not match gradle.properties")
+        distribution = dict(line.split("=", 1) for line in
+                            jar.read("assets/mithrilpf/build.properties").decode().splitlines()
+                            if line and not line.startswith("#"))
+        release_build = (os.environ.get("GITHUB_ACTIONS") == "true"
+                         and os.environ.get("GITHUB_REPOSITORY") == "MithrilAddons/mithrilpf"
+                         and os.environ.get("GITHUB_EVENT_NAME") == "push"
+                         and os.environ.get("GITHUB_REF_TYPE") == "tag"
+                         and os.environ.get("GITHUB_REF_NAME") == f"v{expected_version}"
+                         and os.environ.get("GITHUB_WORKFLOW") == "Release")
+        if distribution != {"version": expected_version,
+                            "officialRelease": str(release_build).lower()}:
+            raise ValueError("Incorrect updater distribution marker")
         expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
         if set(metadata["depends"]) != expected:
             raise ValueError("Unexpected required dependency; review this policy explicitly")
@@ -48,6 +61,10 @@ def verify_jar(path):
             raise ValueError("Only the reviewed local QR generator may be embedded")
         jar.read("META-INF/jars/qrcodegen-1.8.0.jar")
         jar.read("META-INF/licenses/LICENSE_qrcodegen")
+        with zipfile.ZipFile(io.BytesIO(jar.read("assets/mithrilpf/updater.jar"))) as helper:
+            helper.read("dev/mithril/mithrilpf/update/UpdateInstaller.class")
+            if helper.read("META-INF/licenses/LICENSE_mithrilpf") != (ROOT / "LICENSE").read_bytes():
+                raise ValueError("Updater license mismatch")
         mixins = json.loads(jar.read("mithrilpf.mixins.json"))
         if mixins["client"] != ["DungeonConnectionMixin"]:
             raise ValueError("Unexpected packet hooks; explicit review required")

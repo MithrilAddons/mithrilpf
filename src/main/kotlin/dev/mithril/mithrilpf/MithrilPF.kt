@@ -7,6 +7,7 @@ import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
+import dev.mithril.mithrilpf.update.ModUpdates
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
@@ -26,6 +27,9 @@ object MithrilPF : ClientModInitializer {
     private lateinit var browserLink: BrowserLink
     private lateinit var recordSync: RecordSync
     private lateinit var parties: PartyClient
+    lateinit var updates: ModUpdates
+        private set
+
     val partyStatus: String
         get() = if (::parties.isInitialized) parties.status else "waiting"
 
@@ -39,6 +43,7 @@ object MithrilPF : ClientModInitializer {
         browserLink = BrowserLink(client)
         recordSync = RecordSync(client)
         parties = PartyClient(client)
+        updates = ModUpdates(client)
         ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
             // ALLOW_GAME still visits every listener when another mod hides the message.
             if (!overlay) parties.chat(message.string)
@@ -94,6 +99,7 @@ object MithrilPF : ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register {
             recordSync.tick()
             parties.tick()
+            updates.tick()
             while (key.consumeClick()) openRequested = true
             if (openRequested) {
                 openRequested = false
@@ -105,6 +111,7 @@ object MithrilPF : ClientModInitializer {
             browserLink.close()
             recordSync.close()
             parties.close()
+            updates.close()
         }
     }
 
