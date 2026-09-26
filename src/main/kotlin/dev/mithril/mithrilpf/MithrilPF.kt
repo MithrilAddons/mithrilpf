@@ -2,6 +2,7 @@ package dev.mithril.mithrilpf
 
 import com.mojang.blaze3d.platform.InputConstants
 import dev.mithril.mithrilpf.account.BrowserLink
+import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -22,6 +23,7 @@ object MithrilPF : ClientModInitializer {
     override fun onInitializeClient() {
         val client = Minecraft.getInstance()
         browserLink = BrowserLink(client)
+        DungeonTimers.register()
         val key =
             KeyMappingHelper.registerKeyMapping(
                 KeyMapping(
@@ -49,7 +51,9 @@ object MithrilPF : ClientModInitializer {
                 client.setScreen(screen(client.screen))
             }
         }
-        ClientLifecycleEvents.CLIENT_STOPPING.register { browserLink.close() }
+        ClientLifecycleEvents.CLIENT_STOPPING.register {
+            browserLink.close()
+        }
     }
 
     fun screen(parent: Screen?): Screen = PartyFinderScreen(parent, browserLink)

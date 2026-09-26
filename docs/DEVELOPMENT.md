@@ -1,73 +1,56 @@
 # Development
 
-MithrilPF is a standalone Fabric client for Minecraft 26.1.2. This initial build
-contains a minimal UI and a user-initiated browser sign-in flow.
-It does not connect to a relay, collect runs, or match parties yet.
+MithrilPF is a standalone Fabric client for Minecraft 26.1.2. Required dependencies
+are Fabric Loader, Fabric API and Fabric Language Kotlin; Mod Menu is optional.
+No Noamm, SkyHanni or MithrilAddons dependency is required.
 
-## Setup
+## Build and contribute
 
-Use JDK 25 and Python 3.14. Import this directory as a Gradle project in IntelliJ
-and select JDK 25 as its Gradle JVM. Use the checked-in wrapper; no Maven/system
-Gradle is needed. Toolchain/dependency versions match the established 26.1.2 build
-without carrying over its feature implementations or optional mod dependencies.
+Use JDK 25 and Python 3.14. Import the Gradle project in IntelliJ with JDK 25.
+Use the checked-in wrapper, not Maven or a system Gradle installation.
 
 ```text
+gradlew.bat spotlessApply
 python tools/check.py
+gradlew.bat runClient
 ```
 
-Windows: `gradlew.bat spotlessApply`, `gradlew.bat build`, `gradlew.bat runClient`.
-Linux: `sh gradlew spotlessApply`, `sh gradlew build`, `sh gradlew runClient`.
-The development client uses this repository's disposable `run/` directory and
-does not touch the owner's normal instances or shared MithrilAddons configuration.
+Linux: use `sh gradlew`. The development client uses the disposable `run/`
+directory. The gameplay artifact is `build/libs/mithrilpf-0.1.0.jar`; the sources
+JAR is not installable. No installer, updater or automatic publication is included.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) and [TESTING.md](TESTING.md).
 
-Runtime requirements: Fabric Loader, Fabric API, Fabric Language Kotlin. Mod Menu
-is optional, compile-only, and not bundled. For testing it locally put its matching
-JAR in `run/mods`; leave it absent for the baseline launch test.
+Keep Kotlin feature logic separate from thin Java mixins. Client state belongs
+to the client thread; bounded workers handle disk/network work. Tests use fakes
+and temporary storage, never real Minecraft sessions or user configuration.
+Use the active game font and the shared Palette constants; no bundled fonts.
+Public documentation is limited to this guide, testing, contribution rules and
+required license notices. Plans and historical verification notes stay local.
 
-Open `/mithrilpf` in a world, or assign the initially unbound **Open MithrilPF**
-control. Mod Menu's configure button opens the same screen from the title screen.
-Escape/Done returns to the previous screen. No browser is opened automatically.
+## Use and storage
 
-## Structure and visual identity
+`/mithrilpf` opens the menu; its Controls keybind starts unbound. Escape returns
+to gameplay. Mod Menu can also open settings.
+Browser linking proves ownership through Mojang and opens an HTTPS confirmation
+page. Only Mojang receives the Minecraft access token. A status-only receipt is
+saved per account in instance-local `config/mithrilpf/link.json`; it cannot log
+into the website or upload records by itself.
 
-- `src/main/kotlin/dev/mithril/mithrilpf`: client entry point, account linking, UI, optional compat.
-- `src/test/kotlin`: pure logic tests using temporary data.
-- `tools/check.py`: same local/CI verification and packaged-JAR checks.
-- `docs/PLAN.md`: extraction and connection checklist.
+Dungeon tracking provides split/real-tick timers, room clear/secrets PBs, F7/M7
+solo 300-score PBs, run history and estimated finish times. `/mithrilpfpbs` shows
+bests; `/mithrilpfstatus` shows detection/storage status. The HUD editor supports
+dragging, scaling and synthetic previews without creating records. Enable the
+Paul +10 score setting before a run when applicable.
 
-Use the website palette: #101114 background, #17181D panels, #2A2C34 borders,
-#B4B8FF accents, #D2D5FF highlights, #F0F0F3 text and #A0A2AE muted text.
-Primary actions use #E8E9F3 with dark text; secondary actions use #1E2027.
-Success/error feedback uses #8DC7AC/#E5A4A4. Use simple
-flat controls, restrained text, keyboard focus, and the active Minecraft font.
-No custom fonts, extra rendering framework, supersampling, or custom shaders.
+Solo attempts require an observed solo roster; a teammate or death invalidates
+the attempt. Room timers count only time spent inside that room, including the
+clear time in the secrets total. Normal/master floors remain separate.
+Estimates use completed five-player runs with less than 20 seconds of lag and
+require three samples; M7 has fallback estimates before then. Unknown/missing
+observations do not create fabricated PBs. Room/map or server-format changes can
+require detector updates. Records are observations, not anti-cheat attestations.
 
-The text-shadow preference has been removed; the UI uses the game font without
-shadows. Any old config file is left untouched but is no longer read or written.
-
-Link browser verifies ownership through Minecraft's Mojang session service and
-opens a five-minute HTTPS link on mithril.foo for explicit browser confirmation.
-Only Mojang receives the Minecraft access token. Mithril receives UUID, name and
-a single-use proof identifier; it never receives the access token. Networking runs
-on a bounded worker, with request timeouts and 16 KiB response limits. Closing the
-screen invalidates pending UI results. A status-only receipt is saved per UUID in
-instance-local `config/mithrilpf/link.json`; no Minecraft token or browser-session
-credential is stored. The website stores its own revocable browser session,
-optionally remembered for 30 days. The receipt becomes linked only after browser
-confirmation and follows that session's renewal, expiry and logout. It cannot
-sign in, renew a session, or authorize future gameplay submissions.
-
-Opening the menu loads the saved receipt on the worker and checks its status.
-While the menu is open, pending confirmations are checked every three seconds;
-confirmed sessions and temporary failures every 30 seconds. Closing the menu
-stops polling. Offline checks keep the saved confirmation but mark status as
-unavailable. Never claim a cached state is a fresh server verification.
-The linked menu offers Open website and Link another browser. Old clients remain
-compatible; existing links need one new linking flow to obtain a receipt.
-The canonical v1 protocol is documented in the web repository's
-docs/ACCOUNT_LINKING.md. No old relay device-authentication overrides are included.
-
-One gameplay JAR is produced at `build/libs/mithrilpf-0.1.0.jar`, plus sources.
-There is no separate dev variant yet: no diagnostic collection exists to separate.
-No automatic install, release signing, updater, or publication is configured.
-Commit signatures are not JAR signatures.
+Settings, per-account PBs and run history live under `config/mithrilpf/`.
+Malformed/newer settings are not overwritten; unknown fields survive edits.
+PB files discourage casual manual edits but are not tamper-proof. Back up this
+directory to retain records. No old MithrilAddons data is imported automatically.
