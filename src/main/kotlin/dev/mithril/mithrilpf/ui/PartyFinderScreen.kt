@@ -2,6 +2,7 @@ package dev.mithril.mithrilpf.ui
 
 import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.account.BrowserLink
+import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.locale.Language
@@ -36,7 +37,8 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
                     Component.empty(),
                     primary = true,
                 ) {
-                    if (browserLink.linked) browserLink.openWebsite() else browserLink.start()
+                    if (browserLink.linked) browserLink.openWebsite()
+                    else minecraft.setScreen(LinkScreen(this, browserLink))
                 }
             )
         relinkButton =
@@ -47,7 +49,7 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
                     buttonWidth,
                     Component.translatable("screen.mithrilpf.relink"),
                 ) {
-                    browserLink.start()
+                    minecraft.setScreen(LinkScreen(this, browserLink))
                 }
             )
         addRenderableWidget(
@@ -94,9 +96,27 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
             Palette.SURFACE,
         )
         g.fill(panel.x + 1, panel.y + 27, panel.x + panel.width - 1, panel.y + 28, Palette.BORDER)
-        line(g, title, 12, Palette.TEXT)
+        line(
+            g,
+            Component.translatable(
+                "screen.mithrilpf.version_title",
+                FabricLoader.getInstance()
+                    .getModContainer("mithrilpf")
+                    .orElseThrow()
+                    .metadata
+                    .version
+                    .friendlyString,
+            ),
+            12,
+            Palette.TEXT,
+        )
         line(g, Component.translatable("screen.mithrilpf.party_finder"), 34, Palette.TEXT)
-        line(g, Component.translatable("screen.mithrilpf.development"), 52, Palette.MUTED)
+        line(
+            g,
+            Component.translatable("party.mithrilpf.${MithrilPF.partyStatus}"),
+            52,
+            Palette.MUTED,
+        )
         line(
             g,
             Component.translatable(

@@ -3,6 +3,7 @@ package dev.mithril.mithrilpf
 import com.mojang.blaze3d.platform.InputConstants
 import dev.mithril.mithrilpf.account.BrowserLink
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
+import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import net.fabricmc.api.ClientModInitializer
@@ -11,6 +12,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
@@ -20,6 +22,10 @@ import org.lwjgl.glfw.GLFW
 object MithrilPF : ClientModInitializer {
     private lateinit var browserLink: BrowserLink
     private lateinit var recordSync: RecordSync
+    private lateinit var parties: PartyClient
+    val partyStatus: String
+        get() = if (::parties.isInitialized) parties.status else "waiting"
+
     val syncStatus: String
         get() = if (::recordSync.isInitialized) recordSync.status else "waiting"
 
@@ -29,6 +35,12 @@ object MithrilPF : ClientModInitializer {
         val client = Minecraft.getInstance()
         browserLink = BrowserLink(client)
         recordSync = RecordSync(client)
+        parties = PartyClient(client)
+        ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
+            // ALLOW_GAME still visits every listener when another mod hides the message.
+            if (!overlay) parties.chat(message.string)
+            true
+        }
         DungeonTimers.register()
         val key =
             KeyMappingHelper.registerKeyMapping(
@@ -43,6 +55,12 @@ object MithrilPF : ClientModInitializer {
             )
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             dispatcher.register(
+                literal("mithrilpfreinvite").executes {
+                    parties.reinvite()
+                    1
+                }
+            )
+            dispatcher.register(
                 literal("mithrilpf").executes {
                     openRequested = true
                     1
@@ -51,6 +69,7 @@ object MithrilPF : ClientModInitializer {
         }
         ClientTickEvents.END_CLIENT_TICK.register {
             recordSync.tick()
+            parties.tick()
             while (key.consumeClick()) openRequested = true
             if (openRequested) {
                 openRequested = false
@@ -61,6 +80,7 @@ object MithrilPF : ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register {
             browserLink.close()
             recordSync.close()
+            parties.close()
         }
     }
 

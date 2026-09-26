@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/build.yml
+  draft:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Validate tag and main ancestry
+        run: python tools/versioning.py
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: mod-ubuntu-24.04
+          path: release
+      - name: Create draft from tested artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          artifact="mithrilpf-${version}.jar"
+          test -f "release/$artifact"
+          (cd release && sha256sum "$artifact" > SHA256SUMS)
+          args=(--draft --verify-tag --generate-notes --title "MithrilPF $version")
+          if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" "release/$artifact" release/SHA256SUMS "${args[@]}"

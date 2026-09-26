@@ -29,9 +29,15 @@ class LinkFlow(private val post: (String, JsonObject) -> String) {
             check(!Thread.currentThread().isInterrupted)
             val verified =
                 parse(post("verify", JsonObject().apply { addProperty("challenge_id", id) }))
+            val code = verified.get("user_code")?.asString
+            require(code == null || code.matches(Regex("[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}")))
+            val lifetime = verified.get("expires_in_seconds")?.asInt ?: 300
+            require(lifetime in 1..300)
             IssuedLink(
                 URI("https://mithril.foo/link#${token(verified, "link_token")}"),
                 if (verified.has("receipt_token")) token(verified, "receipt_token") else null,
+                code,
+                lifetime,
             )
         }
 
@@ -60,4 +66,9 @@ class LinkFlow(private val post: (String, JsonObject) -> String) {
     }
 }
 
-data class IssuedLink(val uri: URI, val receipt: String?)
+class IssuedLink(
+    val uri: URI,
+    val receipt: String?,
+    val code: String? = null,
+    val lifetime: Int = 300,
+)

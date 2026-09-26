@@ -23,6 +23,14 @@ object LinkTransport {
         return request("auth/$path", body, token)
     }
 
+    fun partyPost(path: String, body: JsonObject, token: String?): String {
+        require(path in setOf("party-challenge", "party-verify", "presence", "roster", "invite"))
+        val proof = path.startsWith("party-")
+        require(proof == (token == null))
+        if (token != null) require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return request(if (proof) "auth/$path" else "party/mod/$path", body, token)
+    }
+
     private fun request(path: String, body: JsonObject, token: String?): String {
         require(body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
         HttpClient.newBuilder()
