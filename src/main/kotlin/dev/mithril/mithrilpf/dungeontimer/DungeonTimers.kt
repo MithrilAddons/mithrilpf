@@ -5,6 +5,7 @@ import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import dev.mithril.mithrilpf.sync.RecordSnapshot
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.UUID
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -53,6 +54,9 @@ object DungeonTimers {
 
     val ready
         get() = ::storage.isInitialized && storage.ready && !storage.error
+
+    fun syncSnapshot(player: String): RecordSnapshot =
+        if (ready) RecordSnapshot.from(storage.records, player) else RecordSnapshot(emptyList())
 
     var state: DungeonTimerState? = null
         private set

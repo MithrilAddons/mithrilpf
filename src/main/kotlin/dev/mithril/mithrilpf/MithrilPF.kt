@@ -3,6 +3,7 @@ package dev.mithril.mithrilpf
 import com.mojang.blaze3d.platform.InputConstants
 import dev.mithril.mithrilpf.account.BrowserLink
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
+import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -18,11 +19,16 @@ import org.lwjgl.glfw.GLFW
 
 object MithrilPF : ClientModInitializer {
     private lateinit var browserLink: BrowserLink
+    private lateinit var recordSync: RecordSync
+    val syncStatus: String
+        get() = if (::recordSync.isInitialized) recordSync.status else "waiting"
+
     private var openRequested = false
 
     override fun onInitializeClient() {
         val client = Minecraft.getInstance()
         browserLink = BrowserLink(client)
+        recordSync = RecordSync(client)
         DungeonTimers.register()
         val key =
             KeyMappingHelper.registerKeyMapping(
@@ -44,6 +50,7 @@ object MithrilPF : ClientModInitializer {
             )
         }
         ClientTickEvents.END_CLIENT_TICK.register {
+            recordSync.tick()
             while (key.consumeClick()) openRequested = true
             if (openRequested) {
                 openRequested = false
@@ -53,6 +60,7 @@ object MithrilPF : ClientModInitializer {
         }
         ClientLifecycleEvents.CLIENT_STOPPING.register {
             browserLink.close()
+            recordSync.close()
         }
     }
 

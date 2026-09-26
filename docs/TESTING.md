@@ -27,6 +27,10 @@ Build/package guards are not malware scanning or proof of runtime correctness.
   Paul; test death and teammate invalidation. The owner confirmed successful
   live 300-score detection on 2026-09-26; that is not coverage of every modifier.
 - Complete qualifying runs and verify history, three-sample estimates and fallback.
+- Verify PB uploads and website card values; test repeat/slower records, logout,
+  account switching, lost connectivity and restart. Check that no records from
+  another account are submitted and linking still works while sync is retrying.
+
 Keep session-specific results and outstanding test notes local. State clearly
 which checks were automated and which were performed in Minecraft; compilation
 alone does not establish gameplay accuracy or performance.
