@@ -111,4 +111,22 @@ class LinkFlowTest {
         assertEquals("https://mithril.foo/link#$token", run(receipt).uri.toString())
         assertFails { run("bad") }
     }
+
+    @Test
+    fun `short code and deadline are validated without breaking old servers`() {
+        fun run(extra: String) = LinkFlow { path, _ ->
+            if (path == "challenge") challenge else verified.dropLast(1) + extra + "}"
+        }
+            .run(uuid, "Player") {}
+        val issued = run(""", "user_code":"ABCD-EFGH", "expires_in_seconds":300""")
+        assertEquals("ABCD-EFGH", issued.code)
+        assertEquals(300, issued.lifetime)
+        assertNull(run("").code)
+        for (extra in
+            listOf(
+                """, "user_code":"bad"""",
+                """, "expires_in_seconds":301""",
+                """, "expires_in_seconds":0""",
+            )) assertFails { run(extra) }
+    }
 }

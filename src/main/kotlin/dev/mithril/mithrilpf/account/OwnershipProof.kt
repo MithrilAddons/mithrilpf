@@ -2,7 +2,7 @@ package dev.mithril.mithrilpf.account
 
 import java.util.concurrent.locks.ReentrantLock
 
-/** Mojang keeps one pending server proof per account. Do not race link/sync proofs. */
+/** Mojang keeps one pending server proof per account. Do not race link/sync/party proofs. */
 object OwnershipProof {
     private val lock = ReentrantLock()
 

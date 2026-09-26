@@ -20,9 +20,18 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
     private val flow = LinkFlow(LinkTransport::post)
     private var pending: Future<*>? = null
     private var generation = 0
+    private val lifecycle = Any()
     private var screenOpen = false
     private var account = ""
     private var receipt: LinkReceipt? = null
+    private var candidate: LinkReceipt? = null
+    private var deadline = Long.MAX_VALUE
+    var issued: IssuedLink? = null
+        private set
+
+    var qr: LinkQr? = null
+        private set
+
     private var nextCheck = Long.MAX_VALUE
     var status = "ready"
         private set
@@ -32,6 +41,9 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
 
     val linked: Boolean
         get() = receipt?.confirmed == true
+
+    val secondsLeft: Long
+        get() = TimeUnit.NANOSECONDS.toSeconds((deadline - System.nanoTime()).coerceAtLeast(0))
 
     fun show() {
         val uuid = client.user.profileId.toString().replace("-", "")
@@ -70,8 +82,21 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
 
     fun tick() {
         if (screenOpen && account != client.user.profileId.toString().replace("-", "")) show()
+        if (issued != null && System.nanoTime() >= deadline) {
+            // An expired attempt does not remove the previously confirmed receipt.
+            synchronized(lifecycle) { generation++ }
+            pending?.cancel(true)
+            issued = null
+            qr = null
+            candidate = null
+            working = false
+            status = "code_expired"
+            nextCheck = Long.MAX_VALUE
+        }
         if (!screenOpen || working || System.nanoTime() < nextCheck) return
-        val saved = receipt ?: return
+        val replacement = candidate != null
+        val saved = candidate ?: receipt ?: return
+        val active = receipt
         val uuid = account
         val attempt = generation
         working = true
@@ -79,28 +104,32 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
         pending = worker.submit {
             try {
                 val result = flow.status(saved.token, uuid)
-                val updated =
-                    when (result) {
-                        "linked" -> saved.copy(confirmed = true)
-                        "pending" -> saved.copy(confirmed = false)
-                        else -> null
-                    }
-                if (updated != saved) store.save(uuid, updated)
+                val updated = LinkPromotion.saved(active, saved, result, replacement)
+                synchronized(lifecycle) {
+                    if (attempt != generation) return@submit
+                    if (updated != active) store.save(uuid, updated)
+                }
                 client.execute {
                     if (attempt == generation) {
                         receipt = updated
+                        if (result != "pending") {
+                            candidate = null
+                            issued = null
+                            qr = null
+                        }
                         status =
                             when (result) {
                                 "linked" -> "linked"
                                 "pending" -> "opened"
-                                else -> "expired"
+                                else -> if (replacement) "code_expired" else "expired"
                             }
                         working = false
                         nextCheck =
-                            if (updated == null) Long.MAX_VALUE
+                            if (result == "expired" || updated == null && !replacement)
+                                Long.MAX_VALUE
                             else
                                 System.nanoTime() +
-                                    TimeUnit.SECONDS.toNanos(if (updated.confirmed) 30 else 3)
+                                    TimeUnit.SECONDS.toNanos(if (result == "linked") 30 else 3)
                     }
                 }
             } catch (_: Exception) {
@@ -117,32 +146,46 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
 
     fun openWebsite() = Util.getPlatform().openUri(URI("https://mithril.foo/party-finder"))
 
+    fun openLink() {
+        issued?.let { Util.getPlatform().openUri(it.uri) }
+    }
+
+    fun copyLink() {
+        issued?.let { client.keyboardHandler.clipboard = it.uri.toString() }
+    }
+
     fun start() {
         if (working) return
         status = "busy"
         working = true
         nextCheck = Long.MAX_VALUE
-        val attempt = ++generation
+        val attempt = synchronized(lifecycle) { ++generation }
+        candidate = null
+        issued = null
+        qr = null
         val user = client.user
         val uuid = user.profileId.toString().replace("-", "")
         val service = client.services().sessionService()
         worker.purge()
         pending = worker.submit {
             try {
-                val issued =
+                val newLink =
                     flow.run(uuid, user.name) { serverId ->
                         service.joinServer(user.profileId, user.accessToken, serverId)
                     }
-                val saved = issued.receipt?.let { LinkReceipt(it, false) }
-                store.save(uuid, saved)
+                val generatedQr = LinkQr(newLink.uri)
+                val expires =
+                    System.nanoTime() + TimeUnit.SECONDS.toNanos(newLink.lifetime.toLong())
                 client.execute {
                     if (attempt == generation) {
-                        receipt = saved
-                        Util.getPlatform().openUri(issued.uri)
+                        issued = newLink
+                        qr = generatedQr
+                        deadline = expires
+                        candidate = newLink.receipt?.let { LinkReceipt(it, false) }
                         status = "opened"
                         working = false
                         nextCheck =
-                            if (saved == null) Long.MAX_VALUE
+                            if (candidate == null) Long.MAX_VALUE
                             else System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
                     }
                 }
@@ -160,11 +203,14 @@ class BrowserLink(private val client: Minecraft) : AutoCloseable {
 
     fun cancel() {
         screenOpen = false
-        generation++
+        synchronized(lifecycle) { generation++ }
         pending?.cancel(true)
         pending = null
         working = false
         nextCheck = Long.MAX_VALUE
+        issued = null
+        qr = null
+        candidate = null
     }
 
     override fun close() {

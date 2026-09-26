@@ -9,6 +9,15 @@ Fabric Loader/API, Fabric Language Kotlin, Minecraft libraries, and optional Mod
 are resolved by Gradle/installed separately, not embedded in the gameplay JAR.
 No external fonts, sounds, or artwork are bundled.
 
+## Local QR generation
+
+Project Nayuki's QR Code generator 1.8.0 (`io.nayuki:qrcodegen`) is bundled under
+the MIT license. Source: https://github.com/nayuki/QR-Code-generator/tree/v1.8.0.
+The license is in `LICENSES/LICENSE_qrcodegen` and packaged under `META-INF/licenses`.
+It generates the linking QR locally; no QR service receives login links.
+ZXing core 3.5.4 (Apache-2.0) is used only in tests to decode the generated QR,
+not shipped: https://github.com/zxing/zxing.
+
 ## Dungeon tracking
 
 The timer and solo-room implementation and regression tests were extracted from

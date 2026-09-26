@@ -30,11 +30,20 @@ def verify_jar(path):
             raise ValueError("Incorrect mod identity")
         if "${" in metadata["version"]:
             raise ValueError("Unexpanded mod version")
+        expected_version = next(line.split("=", 1)[1] for line in
+                                (ROOT / "gradle.properties").read_text().splitlines()
+                                if line.startswith("mod_version="))
+        if metadata["version"] != expected_version or path.name != f"mithrilpf-{expected_version}.jar":
+            raise ValueError("Packaged version or filename does not match gradle.properties")
         expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
         if set(metadata["depends"]) != expected:
             raise ValueError("Unexpected required dependency; review this policy explicitly")
-        if metadata.get("mixins") != ["mithrilpf.mixins.json"] or metadata.get("jars"):
+        if metadata.get("mixins") != ["mithrilpf.mixins.json"]:
             raise ValueError("Unexpected mixin configuration or embedded dependency")
+        if metadata.get("jars") != [{"file": "META-INF/jars/qrcodegen-1.8.0.jar"}]:
+            raise ValueError("Only the reviewed local QR generator may be embedded")
+        jar.read("META-INF/jars/qrcodegen-1.8.0.jar")
+        jar.read("META-INF/licenses/LICENSE_qrcodegen")
         mixins = json.loads(jar.read("mithrilpf.mixins.json"))
         if mixins["client"] != ["DungeonConnectionMixin"]:
             raise ValueError("Unexpected packet hooks; explicit review required")
@@ -52,6 +61,7 @@ def verify_jar(path):
 
 
 def main():
+    subprocess.run([sys.executable, "tools/versioning.py"], cwd=ROOT, check=True)
     wrapper = ROOT / "gradle/wrapper/gradle-wrapper.jar"
     if hashlib.sha256(wrapper.read_bytes()).hexdigest() != WRAPPER_SHA256:
         raise ValueError("Gradle wrapper checksum mismatch")
