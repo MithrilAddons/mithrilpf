@@ -28,6 +28,10 @@ def verify_jar(path):
         metadata = json.loads(jar.read("fabric.mod.json"), object_pairs_hook=unique_object)
         if metadata["id"] != "mithrilpf" or metadata["environment"] != "client":
             raise ValueError("Incorrect mod identity")
+        if metadata.get("license") != "MIT":
+            raise ValueError("Incorrect project license")
+        if jar.read("META-INF/licenses/LICENSE_mithrilpf") != (ROOT / "LICENSE").read_bytes():
+            raise ValueError("Packaged project license is missing or differs from LICENSE")
         if "${" in metadata["version"]:
             raise ValueError("Unexpanded mod version")
         expected_version = next(line.split("=", 1)[1] for line in

@@ -4,6 +4,10 @@ MithrilPF is a standalone Fabric client for Minecraft 26.1.2. Required dependenc
 are Fabric Loader, Fabric API and Fabric Language Kotlin; Mod Menu is optional.
 No Noamm, SkyHanni or MithrilAddons dependency is required.
 
+Original MithrilPF code is licensed under [MIT](../LICENSE).
+Third-party licenses are documented in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)
+and included in the gameplay JAR.
+
 ## Install the beta
 
 1. Use Minecraft **26.1.2**, Java **25**, and Fabric Loader **0.19.3 or newer**.

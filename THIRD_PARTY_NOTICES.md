@@ -32,4 +32,5 @@ The license is in `LICENSES/LICENSE_noamm` and packaged under `META-INF/licenses
 used by MithrilAddons (Noamm 1.2.6, September 2026). Room data contains names,
 types, hashes and secret counts, not player data or secret routes. No Noamm,
 SkyHanni or Skyblocker code is loaded or reflected into at runtime. Original
-Mithril code retains its existing All-Rights-Reserved declaration.
+MithrilPF code in this repository is licensed under MIT; see LICENSE.
+Third-party components retain their respective licenses listed above.
