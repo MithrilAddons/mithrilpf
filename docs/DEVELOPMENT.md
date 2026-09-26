@@ -4,6 +4,25 @@ MithrilPF is a standalone Fabric client for Minecraft 26.1.2. Required dependenc
 are Fabric Loader, Fabric API and Fabric Language Kotlin; Mod Menu is optional.
 No Noamm, SkyHanni or MithrilAddons dependency is required.
 
+## Install the beta
+
+1. Use Minecraft **26.1.2**, Java **25**, and Fabric Loader **0.19.3 or newer**.
+2. Install Fabric API **0.154.2+26.1.2 or newer for this Minecraft version** and
+   Fabric Language Kotlin **1.13.12+kotlin.2.4.0 or newer** in the instance's `mods` folder.
+3. Download the gameplay JAR from the
+   [GitHub releases](https://github.com/MithrilAddons/mithrilpf/releases), remove
+   any older MithrilPF JAR from `mods`, and put the new one there. Do not install
+   the sources JAR. Restart Minecraft.
+4. Open `/mpf` (or `/mithrilpf`), choose Link browser, then use
+   [the party finder](https://mithril.foo/party-finder). Another browser or phone
+   can be linked using the QR/link/code options.
+
+`/mpc <message>` chats with your linked party on the website and in Minecraft.
+This beta is for feedback: five-player handoff and the new in-game chat still
+need broader real-game testing. SS tracking is not included. Party listings and
+chat are temporary and reset when the backend restarts; linked accounts and PBs
+are stored separately. Back up `config/mithrilpf/` before trying new builds.
+
 ## Build and contribute
 
 Use JDK 25 and Python 3.14. Import the Gradle project in IntelliJ with JDK 25.
@@ -29,7 +48,7 @@ required license notices. Plans and historical verification notes stay local.
 
 ## Use and storage
 
-`/mithrilpf` opens the menu; its Controls keybind starts unbound. Escape returns
+`/mithrilpf` (or `/mpf`) opens the menu; its Controls keybind starts unbound. Escape returns
 to gameplay. Mod Menu can also open settings.
 Browser linking proves ownership through Mojang and opens an HTTPS confirmation
 page. Only Mojang receives the Minecraft access token. A status-only receipt is
@@ -95,3 +114,18 @@ or log into the browser. All five must be online before one automatic invite rou
 the mod never kicks, disbands or leaves automatically. These flows still need
 multi-account runtime testing. The canonical protocol lives in the web repository's
 [API guide](https://github.com/MithrilAddons/web/blob/main/docs/API.md).
+
+`/mpc <message>` (also `/mithrilpfchat <message>`) sends to the linked Mithril party,
+including its website members. Replies appear as `[Mithril Party] Name: message`.
+Normal chat and `/pc` remain Hypixel-only; neither is copied to the relay. Messages
+are plain text, never gameplay commands. The existing scoped party credential is
+reused, with no new sign-in. Chat remains available after the Minecraft handoff.
+
+The first connection displays at most the newest ten retained messages. Temporary
+network reconnects resume from the last received message. History is in server
+memory only (last 100 messages); restart/disband/last-member departure removes it.
+A failed send offers a click-to-prefill retry, never an automatic resend. Retries
+reuse an ID for just under ten minutes. Accounts/parties are isolated, stale replies
+are discarded, and network work runs on bounded background workers. No chat text
+or credentials are saved to mod files or explicitly logged by the mod (Minecraft
+may include displayed chat in its own normal client log).

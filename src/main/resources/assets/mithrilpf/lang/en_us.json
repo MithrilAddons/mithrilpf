@@ -73,5 +73,14 @@
   "tracking.mithrilpf.blood_camp": "Blood Camp",
   "tracking.mithrilpf.wither_king": "Wither King",
   "tracking.mithrilpf.estimate": "Estimated Run Time:",
-  "tracking.mithrilpf.lag": "Lag Lost:"
+  "tracking.mithrilpf.lag": "Lag Lost:",
+  "chat.mithrilpf.prefix": "[Mithril Party] ",
+  "chat.mithrilpf.help": "Mithril party chat: /mpc <message> — shared with your party on the website. /pc is unchanged.",
+  "chat.mithrilpf.ready": "Mithril party chat connected. Use /mpc <message> to talk to your party.",
+  "chat.mithrilpf.reconnecting": "Mithril party chat is reconnecting…",
+  "chat.mithrilpf.unavailable": "Party chat unavailable. Link your account and join a party on mithril.foo.",
+  "chat.mithrilpf.invalid": "Use 1–256 characters without control or formatting codes.",
+  "chat.mithrilpf.busy": "Your previous message is still sending. Please wait.",
+  "chat.mithrilpf.limited": "Sending too quickly. Wait a moment, then click here to retry.",
+  "chat.mithrilpf.failed": "Message delivery could not be confirmed. Click here to retry."
 }

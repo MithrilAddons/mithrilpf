@@ -155,4 +155,56 @@ class PartyFlowTest {
         }
         assertEquals(2, proofs)
     }
+
+    @Test
+    fun `chat reuses party credential and survives a completed handoff`() {
+        var completed = false
+        var proofs = 0
+        val flow =
+            PartyFlow({ path, _, _ ->
+                when (path) {
+                    "presence" ->
+                        PartyProtocol.parse(state)
+                            .apply {
+                                addProperty("chat_party_id", party.id)
+                                if (completed) add("party", com.google.gson.JsonNull.INSTANCE)
+                            }
+                            .toString()
+                    "roster" -> {
+                        completed = true
+                        """{"version":1,"party":null}"""
+                    }
+                    else -> auth(path)
+                }
+            })
+        val result =
+            flow.exchange(
+                uuid,
+                "Alpha",
+                receipt,
+                true,
+                PartyReport(party, GameRoster("Alpha", party.members.map { it.name })),
+            ) {
+                proofs++
+            }
+        assertNull(result.party)
+        assertEquals(party.id, flow.chatAccess()?.partyId)
+        assertEquals(token, flow.chatAccess()?.token)
+        assertEquals(uuid, flow.chatAccess()?.account)
+        flow.exchange(uuid, "Alpha", receipt, true, null) { proofs++ }
+        assertEquals(1, proofs)
+        assertNotNull(flow.chatAccess())
+        flow.clear()
+        assertNull(flow.chatAccess())
+    }
+
+    @Test
+    fun `old backends do not enable chat and invalid chat party ids are rejected`() {
+        val flow = PartyFlow({ path, _, _ -> auth(path) })
+        flow.exchange(uuid, "Alpha", receipt, true, null) {}
+        assertNull(flow.chatAccess())
+        val response = PartyProtocol.parse(state)
+        response.addProperty("chat_party_id", "https://other.invalid")
+        assertFails { PartyProtocol.reply(response) }
+    }
 }

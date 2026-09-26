@@ -3,12 +3,14 @@ package dev.mithril.mithrilpf.party
 import dev.mithril.mithrilpf.account.LinkReceiptStore
 import dev.mithril.mithrilpf.account.LinkTransport
 import dev.mithril.mithrilpf.account.ServiceFailure
+import dev.mithril.mithrilpf.ui.Palette
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Future
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 
 /**
@@ -22,6 +24,47 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     private val store =
         LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json"))
     private val flow = PartyFlow(LinkTransport::partyPost)
+    private var renewChatAuth = false
+    private val relay =
+        PartyChatRelay(
+            LinkTransport::chatPost,
+            { task ->
+                client.execute {
+                    if (client.user.profileId.toString().replace("-", "") == account) task()
+                }
+            },
+            { message ->
+                client.player?.sendSystemMessage(
+                    Component.translatable("chat.mithrilpf.prefix")
+                        .withStyle { it.withColor(Palette.ACCENT and 0xFFFFFF) }
+                        .append(
+                            Component.literal("${message.name}: ").withStyle {
+                                it.withColor(Palette.HIGHLIGHT and 0xFFFFFF)
+                            }
+                        )
+                        .append(
+                            Component.literal(message.text).withStyle {
+                                it.withColor(Palette.TEXT and 0xFFFFFF)
+                            }
+                        )
+                )
+            },
+            { key, retryText ->
+                val message =
+                    Component.translatable("chat.mithrilpf.$key").withStyle {
+                        it.withColor(Palette.ACCENT and 0xFFFFFF)
+                    }
+                if (retryText != null)
+                    message.withStyle {
+                        it.withClickEvent(ClickEvent.SuggestCommand("/mpc $retryText"))
+                    }
+                client.player?.sendSystemMessage(message)
+            },
+            {
+                renewChatAuth = true
+                nextPoll = 0
+            },
+        )
     private val parser = PartyRosterParser()
     private val invites = ArrayDeque<String>()
     private var pending: Future<*>? = null
@@ -80,11 +123,15 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
         nextPoll = 0
     }
 
+    fun sendChat(text: String) = relay.send(text)
+
     fun tick() {
         val user = client.user
         val uuid = user.profileId.toString().replace("-", "")
         val activeConnection = client.connection
         if (uuid != account || connection !== activeConnection) {
+            if (uuid != account) relay.update(null)
+            relay.tick(false)
             generation++
             pending?.cancel(true)
             account = uuid
@@ -100,6 +147,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
             nextRoster = 0
         }
         val time = now()
+        relay.tick(client.player != null && activeConnection != null)
         val inGame = online()
         val current = party
         if (!inGame) {
@@ -131,6 +179,8 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
         if (busy || time < nextPoll) return
         val attempt = generation
         val outgoing = report
+        val renew = renewChatAuth
+        renewChatAuth = false
         report = null // Never replay an uncertain invite request automatically.
         val service = client.services().sessionService()
         busy = true
@@ -138,8 +188,10 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
         worker.purge()
         pending = worker.submit {
             var reply: PartyReply? = null
+            var chatAccess: ChatAccess? = null
             val result =
                 try {
+                    if (renew) flow.clear()
                     val receipt = store.load(uuid)
                     if (receipt == null) {
                         flow.clear()
@@ -150,6 +202,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
                                 serverId ->
                                 service.joinServer(user.profileId, user.accessToken, serverId)
                             }
+                        chatAccess = flow.chatAccess()
                         "connected"
                     }
                 } catch (failure: Exception) {
@@ -158,10 +211,12 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
                     else "unavailable"
                 }
             val received = reply
+            val receivedChat = chatAccess
             client.execute {
                 if (generation == attempt) {
                     busy = false
                     status = result
+                    if (result != "unavailable" && !renewChatAuth) relay.update(receivedChat)
                     val previous = party
                     party = received?.party
                     if (party != null && previous?.id != party?.id) message("reserved")
@@ -189,7 +244,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
                     failures = if (result == "unavailable") (failures + 1).coerceAtMost(4) else 0
                     val delay =
                         if (failures > 0) minOf(300, 30 shl failures) else received?.interval ?: 30
-                    nextPoll = if (report != null) 0 else now() + delay * 1_000L
+                    nextPoll = if (report != null || renewChatAuth) 0 else now() + delay * 1_000L
                 }
             }
         }
@@ -200,6 +255,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     }
 
     override fun close() {
+        relay.close()
         generation++
         pending?.cancel(true)
         worker.shutdownNow()

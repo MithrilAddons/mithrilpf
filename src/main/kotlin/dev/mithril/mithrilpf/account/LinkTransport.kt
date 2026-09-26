@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.time.Duration
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Flow
+import java.util.concurrent.TimeUnit
 
 object LinkTransport {
     fun post(path: String, body: JsonObject): String {
@@ -31,7 +32,19 @@ object LinkTransport {
         return request(if (proof) "auth/$path" else "party/mod/$path", body, token)
     }
 
-    private fun request(path: String, body: JsonObject, token: String?): String {
+    fun chatPost(path: String, body: JsonObject, token: String): String {
+        require(path in setOf("state", "send"))
+        require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return request("party/mod/chat/$path", body, token, 262144, if (path == "state") 35 else 12)
+    }
+
+    private fun request(
+        path: String,
+        body: JsonObject,
+        token: String?,
+        limit: Int = 16384,
+        timeout: Long = 12,
+    ): String {
         require(body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
@@ -40,20 +53,27 @@ object LinkTransport {
             .use { client ->
                 val request =
                     HttpRequest.newBuilder(URI("https://mithril.foo/api/v1/$path"))
-                        .timeout(Duration.ofSeconds(12))
+                        .timeout(Duration.ofSeconds(timeout))
                         .header("Content-Type", "application/json")
                         .header("Accept", "application/json")
                         .apply { if (token != null) header("Authorization", "Bearer $token") }
                         .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                         .build()
-                val response = client.send(request) { BoundedBody() }
+                val pending = client.sendAsync(request) { BoundedBody(limit) }
+                val response =
+                    try {
+                        pending.get(timeout, TimeUnit.SECONDS)
+                    } finally {
+                        pending.cancel(true)
+                        client.shutdownNow()
+                    }
                 if (response.statusCode() != 200) throw ServiceFailure(response.statusCode())
                 return response.body()
             }
     }
 
     /** Bounds allocation as data arrives, rather than after receiving the body. */
-    private class BoundedBody : HttpResponse.BodySubscriber<String> {
+    private class BoundedBody(private val limit: Int) : HttpResponse.BodySubscriber<String> {
         private val delegate = HttpResponse.BodySubscribers.ofString(Charsets.UTF_8)
         private lateinit var subscription: Flow.Subscription
         private var size = 0
@@ -67,7 +87,7 @@ object LinkTransport {
 
         override fun onNext(items: List<ByteBuffer>) {
             for (item in items) {
-                if (item.remaining() > 16384 - size) {
+                if (item.remaining() > limit - size) {
                     subscription.cancel()
                     delegate.onError(IllegalStateException("Response too large"))
                     return
