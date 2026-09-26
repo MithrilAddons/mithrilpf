@@ -1,6 +1,7 @@
 package dev.mithril.mithrilpf
 
 import com.mojang.blaze3d.platform.InputConstants
+import com.mojang.brigadier.arguments.StringArgumentType
 import dev.mithril.mithrilpf.account.BrowserLink
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.party.PartyClient
@@ -8,6 +9,7 @@ import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -16,6 +18,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import org.lwjgl.glfw.GLFW
 
@@ -54,6 +57,21 @@ object MithrilPF : ClientModInitializer {
                 )
             )
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
+            for (name in listOf("mpc", "mithrilpfchat")) dispatcher.register(
+                literal(name)
+                    .executes {
+                        client.player?.sendSystemMessage(
+                            Component.translatable("chat.mithrilpf.help")
+                        )
+                        1
+                    }
+                    .then(
+                        argument("message", StringArgumentType.greedyString()).executes {
+                            parties.sendChat(StringArgumentType.getString(it, "message"))
+                            1
+                        }
+                    )
+            )
             dispatcher.register(
                 literal("mithrilpfreinvite").executes {
                     parties.reinvite()
@@ -62,6 +80,12 @@ object MithrilPF : ClientModInitializer {
             )
             dispatcher.register(
                 literal("mithrilpf").executes {
+                    openRequested = true
+                    1
+                }
+            )
+            dispatcher.register(
+                literal("mpf").executes {
                     openRequested = true
                     1
                 }

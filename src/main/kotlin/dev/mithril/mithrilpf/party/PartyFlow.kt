@@ -14,6 +14,11 @@ class PartyFlow(
     private var receipt = ""
     private var token: String? = null
     private var expires = 0L
+    private var chatPartyId: String? = null
+
+    fun chatAccess(): ChatAccess? = token?.let { credential ->
+        chatPartyId?.let { ChatAccess(account, it, credential) }
+    }
 
     fun exchange(
         uuid: String,
@@ -85,6 +90,7 @@ class PartyFlow(
                     )
                 )
             val current = reply.party
+            chatPartyId = reply.chatPartyId
             if (
                 online &&
                     report != null &&
@@ -107,7 +113,7 @@ class PartyFlow(
             }
             return reply
         } catch (failure: ServiceFailure) {
-            if (failure.statusCode == 401) token = null
+            if (failure.statusCode == 401) clear()
             throw failure
         }
     }
@@ -116,6 +122,7 @@ class PartyFlow(
         token = null
         account = ""
         receipt = ""
+        chatPartyId = null
     }
 
     private fun credential(body: JsonObject, key: String) =

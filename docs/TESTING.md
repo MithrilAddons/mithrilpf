@@ -39,6 +39,13 @@ Build/package guards are not malware scanning or proof of runtime correctness.
 - With five accounts, verify one invite round, missing-player retry, no-show
   removal, leadership changes and completion only after all game members join.
   Test conflicting parties, hidden chat, reconnects and backend restart.
+- Verify `/mpf` opens the same menu as `/mithrilpf`. In a linked party, exchange
+  `/mpc` messages with another mod client and a website/phone browser, including
+  after the full party has joined Minecraft. Check one echo per send, server hops,
+  logout/removal, account switches, slow requests and rate limits. Retry a failed
+  send by clicking its notice. Confirm `/pc` and ordinary chat are not relayed,
+  and command-looking incoming text never executes. New chat has not yet had
+  owner-run Minecraft verification; the automated relay tests use fakes only.
 
 Keep session-specific results and outstanding test notes local. State clearly
 which checks were automated and which were performed in Minecraft; compilation

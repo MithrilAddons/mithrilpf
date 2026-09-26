@@ -47,6 +47,7 @@ data class PartyReply(
     val party: PartyHandoff?,
     val interval: Int = 25,
     val invites: List<String> = emptyList(),
+    val chatPartyId: String? = null,
 )
 
 object PartyProtocol {
@@ -104,7 +105,15 @@ object PartyProtocol {
                             !invite.equals(party.leader, true)
                     }
         )
-        return PartyReply(party, interval, invites)
+        val chatPartyId =
+            body
+                .get("chat_party_id")
+                ?.takeUnless { it.isJsonNull }
+                ?.let {
+                    require(it.isJsonPrimitive && it.asJsonPrimitive.isString)
+                    it.asString.also { id -> require(ID.matches(id)) }
+                }
+        return PartyReply(party, interval, invites, chatPartyId)
     }
 
     private fun name(value: String) = value.also { require(NAME.matches(it)) }
