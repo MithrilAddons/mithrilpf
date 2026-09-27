@@ -48,29 +48,21 @@ class DiscordActivityModel {
         if (!enabled) return null
         if (inDungeon) {
             val elapsed = timer?.rows(stamp)?.get("Total")?.realMillis
-            if (start == null && elapsed != null) start = (epochMillis - elapsed) / 1000
-            val phase =
-                when {
-                    timer?.ended == true -> "Run complete"
-                    timer == null || elapsed == null -> "Preparing"
-                    else ->
-                        when (val name = timer.current(stamp)?.first) {
-                            "Blood Open" -> "Blood Rush"
-                            "Watcher Clear" -> "Blood Camp"
-                            "Dragons" -> "Wither King"
-                            null -> "Boss"
-                            else -> name
-                        }
-                }
-            val state =
-                if (timer?.ended == true && elapsed != null) {
-                    val seconds = elapsed / 1000
-                    "Finished in ${seconds / 60}m ${seconds % 60}s"
-                } else "In a dungeon"
+            if (timer == null || elapsed == null)
+                return DiscordActivity("${floor ?: "Dungeon"} · Preparing", "In a dungeon")
+            if (start == null) start = (epochMillis - elapsed) / 1000
+            val label = floor ?: timer.floor
+            if (timer.ended) {
+                val seconds = elapsed / 1000
+                return DiscordActivity(
+                    "$label · Run complete",
+                    "Finished in ${seconds / 60}m ${seconds % 60}s",
+                )
+            }
             return DiscordActivity(
-                "${floor ?: timer?.floor ?: "Dungeon"} · $phase",
-                state,
-                if (timer?.ended == true) null else start,
+                "$label · ${phase(timer.current(stamp)?.first)}",
+                "In a dungeon",
+                start,
             )
         }
         return finder?.let {
@@ -79,4 +71,13 @@ class DiscordActivityModel {
             else DiscordActivity("${it.floor} · Party ${it.members}/5", "${it.leader}'s party")
         }
     }
+
+    private fun phase(name: String?) =
+        when (name) {
+            "Blood Open" -> "Blood Rush"
+            "Watcher Clear" -> "Blood Camp"
+            "Dragons" -> "Wither King"
+            null -> "Boss"
+            else -> name
+        }
 }

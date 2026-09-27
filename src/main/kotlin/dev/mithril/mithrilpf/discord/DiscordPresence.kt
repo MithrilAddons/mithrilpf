@@ -50,27 +50,7 @@ class DiscordPresence(
                     continue
                 }
                 try {
-                    val ipc = connect()
-                    active.set(ipc)
-                    if (closed || desired == null) continue
-                    timed { ipc.handshake() }
-                    var sent: DiscordActivity? = null
-                    var next = 0L
-                    var refresh = 0L
-                    var nonce = 0L
-                    while (!closed && desired != null && active.get() === ipc) {
-                        val value = desired ?: break
-                        val now = System.nanoTime()
-                        if ((sent != value && now >= next) || now >= refresh) {
-                            timed { ipc.activity(value, (++nonce).toString()) }
-                            sent = value
-                            next = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(updateMillis)
-                            // Drain pings/detect a closed desktop client even for a static
-                            // activity.
-                            refresh = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-                        }
-                        pause(250)
-                    }
+                    session()
                 } catch (_: Exception) {
                     // Never log IPC payloads (READY includes Discord account information).
                     disconnect()
@@ -90,6 +70,29 @@ class DiscordPresence(
         } finally {
             disconnect()
             watchdog.shutdown()
+        }
+    }
+
+    private fun session() {
+        val ipc = connect()
+        active.set(ipc)
+        if (closed || desired == null) return
+        timed { ipc.handshake() }
+        var sent: DiscordActivity? = null
+        var next = 0L
+        var refresh = 0L
+        var nonce = 0L
+        while (!closed && desired != null && active.get() === ipc) {
+            val value = desired ?: break
+            val now = System.nanoTime()
+            if ((sent != value && now >= next) || now >= refresh) {
+                timed { ipc.activity(value, (++nonce).toString()) }
+                sent = value
+                next = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(updateMillis)
+                // Drain pings/detect a closed desktop client even for a static activity.
+                refresh = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            }
+            pause(250)
         }
     }
 
