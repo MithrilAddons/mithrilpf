@@ -2,6 +2,7 @@ package dev.mithril.mithrilpf.ui
 
 import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.account.BrowserLink
+import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.screens.Screen
@@ -13,11 +14,28 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
     private lateinit var panel: PanelLayout
     private lateinit var linkButton: FlatButton
     private lateinit var relinkButton: FlatButton
+    private lateinit var discordButton: FlatButton
 
     override fun init() {
         panel = PanelLayout.fit(width, height)
         browserLink.show()
         val buttonWidth = (panel.width - 24).coerceAtLeast(1)
+        discordButton =
+            addRenderableWidget(
+                FlatButton(
+                    panel.x + 12,
+                    panel.y + panel.height - 134,
+                    buttonWidth,
+                    Component.empty(),
+                ) {
+                    DungeonTimers.update(
+                        DungeonTimers.settings.copy(
+                            discordPresence = !DungeonTimers.settings.discordPresence
+                        )
+                    )
+                    updateButton()
+                }
+            )
         addRenderableWidget(
             FlatButton(
                 panel.x + 12,
@@ -81,6 +99,14 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
     }
 
     private fun updateButton() {
+        discordButton.active = DungeonTimers.ready
+        discordButton.message =
+            Component.translatable(
+                "screen.mithrilpf.discord",
+                Component.translatable(
+                    if (DungeonTimers.settings.discordPresence) "options.on" else "options.off"
+                ),
+            )
         linkButton.active = !browserLink.working || browserLink.linked
         linkButton.message =
             Component.translatable(
@@ -151,7 +177,7 @@ class PartyFinderScreen(private val parent: Screen?, private val browserLink: Br
     }
 
     private fun line(g: GuiGraphicsExtractor, text: Component, offset: Int, color: Int) {
-        if (offset + 10 > panel.height - 116) return
+        if (offset + 10 > panel.height - 142) return
         g.text(
             font,
             Language.getInstance()

@@ -15,6 +15,15 @@ Build/package guards are not malware scanning or proof of runtime correctness.
 
 ## Manual regression checks
 
+- Discord: start with Discord closed, then open/restart it. Check `/mpf`'s Rich
+  Presence toggle and restart persistence. With activity sharing enabled, check
+  floor/split/elapsed time through a dungeon, completion and leaving. Dungeon
+  status must win over finder activity. Search on the website, join/leave a party,
+  change leader and finish game handoff; confirm leader/member count and the
+  website button (viewed from another Discord account). Disable the feature or
+  close Minecraft and confirm the activity disappears. Test Windows and Unix IPC
+  separately; synthetic stream tests do not verify Discord's actual rendering.
+
 - Updates: test with disposable instances first. Check stable-only and pre-release
   selection, turn updates off during/after download, quit normally and verify the
   new internal version plus backup. Test locked/read-only targets and an interrupted

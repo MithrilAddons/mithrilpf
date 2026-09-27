@@ -30,6 +30,7 @@ class TrackingSettingsTest {
                 HudPosition(0.0, 1.0, 10.0),
                 HudPosition(1.0, 0.0, 0.5),
                 HudPosition(0.3, 0.7, 3.0),
+                false,
             )
         store.save(value)
         assertEquals(value, TrackingSettingsStore(file).load())
@@ -59,6 +60,7 @@ class TrackingSettingsTest {
                 "{}",
                 """{"version":2}""",
                 """{"version":1,"ticks":"true"}""",
+                """{"version":1,"discordPresence":"true"}""",
                 """{"version":1,"tablePosition":{"scale":0.49}}""",
                 """{"version":1,"tablePosition":{"x":1.01}}""",
                 """{"version":1,"tablePosition":{"scale":1e999}}""",
