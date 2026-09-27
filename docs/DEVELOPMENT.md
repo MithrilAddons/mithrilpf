@@ -150,6 +150,23 @@ directory to retain records. No old MithrilAddons data is imported automatically
 
 ## Linked services
 
+Discord Rich Presence is enabled by default and can be disabled in `/mpf`.
+It uses application `1553815052237152407` over the local Discord desktop client's
+IPC pipe/socket (JDK only; no bot token, native SDK, HTTP destination or extra mod).
+Dungeon tracking takes priority: floor/current split and real elapsed run time;
+completed runs stop the elapsed clock. Tracking must be enabled for dungeon details.
+Otherwise the linked finder activity shows a search or the party leader and size,
+including searches made on the website while Minecraft is open. The existing
+presence heartbeat supplies this summary, so changes usually take up to 25 seconds
+(up to two minutes when the account was previously idle in the finder).
+Outside these activities the presence is cleared. A fixed website button opens
+`https://mithril.foo/party-finder`; there are no Discord join secrets or game commands.
+The toggle is saved as `discordPresence` in the existing tracking configuration.
+Discord must be running and allow activity sharing; its own privacy settings apply.
+IPC runs off the client thread with bounded frames, five-second exchanges, rate
+limiting and reconnect backoff. Windows named pipes and standard Unix sockets are
+supported; sandboxed Discord clients that hide their IPC endpoint may not connect.
+
 The mod syncs solo-clear and terminal PBs using a fresh Mojang proof and a separate
 15-minute upload credential. Only best timings are uploaded, not room records or
 full run history. Browser logout revokes uploads but does not delete saved records.

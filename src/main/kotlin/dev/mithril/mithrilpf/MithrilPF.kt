@@ -3,7 +3,10 @@ package dev.mithril.mithrilpf
 import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.brigadier.arguments.StringArgumentType
 import dev.mithril.mithrilpf.account.BrowserLink
+import dev.mithril.mithrilpf.discord.DiscordActivityModel
+import dev.mithril.mithrilpf.discord.DiscordPresence
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
+import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
@@ -27,6 +30,9 @@ object MithrilPF : ClientModInitializer {
     private lateinit var browserLink: BrowserLink
     private lateinit var recordSync: RecordSync
     private lateinit var parties: PartyClient
+    private lateinit var discord: DiscordPresence
+    private val discordModel = DiscordActivityModel()
+    private var nextDiscordUpdate = 0L
     lateinit var updates: ModUpdates
         private set
 
@@ -43,6 +49,7 @@ object MithrilPF : ClientModInitializer {
         browserLink = BrowserLink(client)
         recordSync = RecordSync(client)
         parties = PartyClient(client)
+        discord = DiscordPresence()
         updates = ModUpdates(client)
         ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
             // ALLOW_GAME still visits every listener when another mod hides the message.
@@ -100,6 +107,21 @@ object MithrilPF : ClientModInitializer {
             recordSync.tick()
             parties.tick()
             updates.tick()
+            val now = System.nanoTime()
+            if (now >= nextDiscordUpdate) {
+                nextDiscordUpdate = now + 1_000_000_000L
+                discord.update(
+                    discordModel.activity(
+                        DungeonTimers.ready && DungeonTimers.settings.discordPresence,
+                        DungeonTimers.settings.enabled && DungeonTimers.inDungeon,
+                        DungeonTimers.floor,
+                        DungeonTimers.state,
+                        TimerStamp(DungeonTimers.ticks, now),
+                        System.currentTimeMillis(),
+                        parties.activity,
+                    )
+                )
+            }
             while (key.consumeClick()) openRequested = true
             if (openRequested) {
                 openRequested = false
@@ -112,6 +134,7 @@ object MithrilPF : ClientModInitializer {
             recordSync.close()
             parties.close()
             updates.close()
+            discord.close()
         }
     }
 

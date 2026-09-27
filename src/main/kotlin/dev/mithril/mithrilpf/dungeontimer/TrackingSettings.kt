@@ -20,6 +20,7 @@ data class TrackingSettings(
     val tablePosition: HudPosition = HudPosition(),
     val splitPosition: HudPosition = HudPosition(0.5, 0.2),
     val tickPosition: HudPosition = HudPosition(0.5, 0.3),
+    val discordPresence: Boolean = true,
 )
 
 /** Worker-owned; unknown fields survive edits and malformed/newer files are never overwritten. */
@@ -68,6 +69,7 @@ class TrackingSettingsStore(private val path: Path) {
             pos("tablePosition", d.tablePosition),
             pos("splitPosition", d.splitPosition),
             pos("tickPosition", d.tickPosition),
+            bool("discordPresence", d.discordPresence),
         )
     }
 
@@ -82,6 +84,7 @@ class TrackingSettingsStore(private val path: Path) {
                 "ticks" to settings.ticks,
                 "dungeonOnly" to settings.dungeonOnly,
                 "paul" to settings.paul,
+                "discordPresence" to settings.discordPresence,
             )
             .forEach { (key, value) -> root.addProperty(key, value) }
         mapOf(

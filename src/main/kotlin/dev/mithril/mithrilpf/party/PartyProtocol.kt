@@ -8,6 +8,8 @@ private val ID = Regex("[A-Za-z0-9_-]{12}")
 
 data class PartyMember(val name: String, val online: Boolean, val accepted: Boolean)
 
+data class FinderActivity(val floor: String, val leader: String?, val members: Int)
+
 data class PartyHandoff(
     val id: String,
     val generation: String,
@@ -48,6 +50,7 @@ data class PartyReply(
     val interval: Int = 25,
     val invites: List<String> = emptyList(),
     val chatPartyId: String? = null,
+    val activity: FinderActivity? = null,
 )
 
 object PartyProtocol {
@@ -113,7 +116,25 @@ object PartyProtocol {
                     require(it.isJsonPrimitive && it.asJsonPrimitive.isString)
                     it.asString.also { id -> require(ID.matches(id)) }
                 }
-        return PartyReply(party, interval, invites, chatPartyId)
+        val activity =
+            body
+                .get("activity")
+                ?.takeUnless { it.isJsonNull }
+                ?.asJsonObject
+                ?.let {
+                    val floor = it.get("floor").asString
+                    require(floor in setOf("F7", "M7"))
+                    val leader =
+                        it.get("leader")
+                            ?.takeUnless { value -> value.isJsonNull }
+                            ?.let { value -> name(value.asString) }
+                    val count = it.get("members")
+                    require(count.isJsonPrimitive && count.asJsonPrimitive.isNumber)
+                    val members = count.asBigDecimal.intValueExact()
+                    require(if (leader == null) members == 0 else members in 1..5)
+                    FinderActivity(floor, leader, members)
+                }
+        return PartyReply(party, interval, invites, chatPartyId, activity)
     }
 
     private fun name(value: String) = value.also { require(NAME.matches(it)) }

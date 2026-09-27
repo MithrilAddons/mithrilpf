@@ -1,4 +1,5 @@
 {
+  "screen.mithrilpf.discord": "Discord Rich Presence: %s",
   "update.mithrilpf.title": "Updates",
   "update.mithrilpf.enabled": "Auto-update",
   "update.mithrilpf.prereleases": "Include pre-releases",

@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class PanelLayoutTest {
     @Test
     fun normalPanelIsCenteredAndBounded() {
-        assertEquals(PanelLayout(320, 164, 320, 212), PanelLayout.fit(960, 540))
+        assertEquals(PanelLayout(320, 145, 320, 250), PanelLayout.fit(960, 540))
     }
 
     @Test

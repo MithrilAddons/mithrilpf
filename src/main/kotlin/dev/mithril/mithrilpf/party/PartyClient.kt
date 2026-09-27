@@ -81,6 +81,9 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     var party: PartyHandoff? = null
         private set
 
+    var activity: FinderActivity? = null
+        private set
+
     var status = "waiting"
         private set
 
@@ -139,6 +142,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
             busy = false
             failures = 0
             party = null
+            activity = null
             report = null
             retry = false
             invites.clear()
@@ -219,6 +223,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
                     if (result != "unavailable" && !renewChatAuth) relay.update(receivedChat)
                     val previous = party
                     party = received?.party
+                    activity = received?.activity
                     if (party != null && previous?.id != party?.id) message("reserved")
                     if (previous?.generation != party?.generation) {
                         invites.clear()
