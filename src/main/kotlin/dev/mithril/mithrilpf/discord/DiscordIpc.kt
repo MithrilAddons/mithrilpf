@@ -101,6 +101,8 @@ class DiscordIpc(
     companion object {
         const val APPLICATION_ID = "1553815052237152407"
 
+        internal fun windowsPipePath(index: Int) = "\\\\.\\pipe\\discord-ipc-$index"
+
         /** Only fixed local IPC endpoints. No TCP, shell, token or registry access. */
         fun connect(): DiscordIpc {
             val windows = System.getProperty("os.name").startsWith("Windows")
@@ -111,7 +113,7 @@ class DiscordIpc(
             for (index in 0..9) {
                 try {
                     if (windows) {
-                        val file = RandomAccessFile("\\\\?\\pipe\\discord-ipc-$index", "rw")
+                        val file = RandomAccessFile(windowsPipePath(index), "rw")
                         return DiscordIpc(
                             object : InputStream() {
                                 override fun read() = file.read()
