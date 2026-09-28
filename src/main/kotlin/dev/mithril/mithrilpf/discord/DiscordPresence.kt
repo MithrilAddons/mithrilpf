@@ -58,15 +58,7 @@ class DiscordPresence(
                 try {
                     session()
                 } catch (failure: Exception) {
-                    // Log only the stage/type, never messages or IPC payloads containing account
-                    // data.
-                    if (!closed && desired != null) {
-                        val summary = "$stage (${failure.javaClass.simpleName})"
-                        if (summary != lastFailure) {
-                            lastFailure = summary
-                            reportFailure("Rich Presence failed during $summary; will retry.")
-                        }
-                    }
+                    recordFailure(failure)
                     disconnect()
                     val retryAt = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(retryMillis)
                     while (!closed && desired != null && System.nanoTime() < retryAt) {
@@ -85,6 +77,15 @@ class DiscordPresence(
             disconnect()
             watchdog.shutdown()
         }
+    }
+
+    private fun recordFailure(failure: Exception) {
+        if (closed || desired == null) return
+        // Log only the stage/type, never messages or IPC payloads containing account data.
+        val summary = "$stage (${failure.javaClass.simpleName})"
+        if (summary == lastFailure) return
+        lastFailure = summary
+        reportFailure("Rich Presence failed during $summary; will retry.")
     }
 
     private fun session() {
