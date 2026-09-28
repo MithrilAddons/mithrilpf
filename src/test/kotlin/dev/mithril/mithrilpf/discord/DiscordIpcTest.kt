@@ -16,6 +16,13 @@ import kotlin.test.*
 class DiscordIpcTest {
     private val value = DiscordActivity("M7 · Blood Rush", "In a dungeon", 100)
 
+    @Test
+    fun `Windows endpoints use the named pipe device namespace`() {
+        for (index in 0..9) {
+            assertEquals("\\\\.\\pipe\\discord-ipc-$index", DiscordIpc.windowsPipePath(index))
+        }
+    }
+
     private fun frame(op: Int, json: String): ByteArray {
         val body = json.toByteArray(Charsets.UTF_8)
         return ByteBuffer.allocate(8 + body.size)
@@ -209,5 +216,50 @@ class DiscordIpcTest {
                 assertEquals(1, attempts.get())
                 presence.update(null)
             }
+    }
+
+    @Test
+    fun `connection diagnostics suppress repeated failures and exclude exception messages`() {
+        val messages = CopyOnWriteArrayList<String>()
+        val attempts = AtomicInteger()
+        DiscordPresence(
+                connect = {
+                    attempts.incrementAndGet()
+                    throw IOException("private account data")
+                },
+                retryMillis = 50,
+                reportFailure = messages::add,
+            )
+            .use { presence ->
+                presence.update(value)
+                await { attempts.get() >= 3 }
+                assertEquals(
+                    listOf("Rich Presence failed during connect (IOException); will retry."),
+                    messages.toList(),
+                )
+            }
+    }
+
+    @Test
+    fun `diagnostics distinguish handshake and activity failures`() {
+        for (stallActivity in listOf(false, true)) {
+            val fake = FakeDiscord(stall = !stallActivity, stallActivity = stallActivity)
+            val messages = CopyOnWriteArrayList<String>()
+            DiscordPresence(
+                    connect = { fake.ipc },
+                    timeoutMillis = 100,
+                    retryMillis = 30000,
+                    reportFailure = messages::add,
+                )
+                .use { presence ->
+                    presence.update(value)
+                    await { messages.isNotEmpty() }
+                    val stage = if (stallActivity) "activity update" else "handshake"
+                    assertEquals(
+                        listOf("Rich Presence failed during $stage (EOFException); will retry."),
+                        messages.toList(),
+                    )
+                }
+        }
     }
 }

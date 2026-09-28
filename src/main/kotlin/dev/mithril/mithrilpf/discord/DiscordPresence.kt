@@ -4,6 +4,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.LockSupport
+import org.slf4j.LoggerFactory
 
 /**
  * Conflated immutable input from Minecraft; all local IPC is worker-owned. A separate watchdog
@@ -14,11 +15,16 @@ class DiscordPresence(
     private val timeoutMillis: Long = 5000,
     private val retryMillis: Long = 30000,
     private val updateMillis: Long = 5000,
+    private val reportFailure: (String) -> Unit = {
+        LoggerFactory.getLogger("MithrilPF Discord").warn(it)
+    },
 ) : AutoCloseable {
     private val active = AtomicReference<DiscordIpc?>()
     @Volatile private var desired: DiscordActivity? = null
     @Volatile private var closed = false
     @Volatile private var deadline = Long.MAX_VALUE
+    private var stage = "connect"
+    private var lastFailure: String? = null
     private val watchdog = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "MithrilPF Discord timeout").apply { isDaemon = true }
     }
@@ -51,8 +57,16 @@ class DiscordPresence(
                 }
                 try {
                     session()
-                } catch (_: Exception) {
-                    // Never log IPC payloads (READY includes Discord account information).
+                } catch (failure: Exception) {
+                    // Log only the stage/type, never messages or IPC payloads containing account
+                    // data.
+                    if (!closed && desired != null) {
+                        val summary = "$stage (${failure.javaClass.simpleName})"
+                        if (summary != lastFailure) {
+                            lastFailure = summary
+                            reportFailure("Rich Presence failed during $summary; will retry.")
+                        }
+                    }
                     disconnect()
                     val retryAt = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(retryMillis)
                     while (!closed && desired != null && System.nanoTime() < retryAt) {
@@ -74,9 +88,11 @@ class DiscordPresence(
     }
 
     private fun session() {
+        stage = "connect"
         val ipc = connect()
         active.set(ipc)
         if (closed || desired == null) return
+        stage = "handshake"
         timed { ipc.handshake() }
         var sent: DiscordActivity? = null
         var next = 0L
@@ -86,7 +102,9 @@ class DiscordPresence(
             val value = desired ?: break
             val now = System.nanoTime()
             if ((sent != value && now >= next) || now >= refresh) {
+                stage = "activity update"
                 timed { ipc.activity(value, (++nonce).toString()) }
+                lastFailure = null
                 sent = value
                 next = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(updateMillis)
                 // Drain pings/detect a closed desktop client even for a static activity.
