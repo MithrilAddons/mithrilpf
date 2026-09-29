@@ -5,9 +5,11 @@
 ![PF Icon](https://github.com/MithrilAddons/mithrilpf/blob/main/src/main/resources/assets/mithrilpf/icon.png?raw=true)
 
 ![GitHub License](https://img.shields.io/github/license/MithrilAddons/mithrilpf?style=for-the-badge)
-![GitHub Repo stars](https://img.shields.io/github/stars/MithrilAddons/mithrilpf?style=for-the-badge)
 [![Discord](https://img.shields.io/discord/1553531327662526464?style=for-the-badge)](https://discord.gg/t3PjnPWXKS)
 [![Version](https://img.shields.io/github/v/release/MithrilAddons/mithrilpf?include_prereleases&style=for-the-badge)](https://github.com/MithrilAddons/mithrilpf/releases)
+![GitHub Downloads](https://img.shields.io/github/downloads/MithrilAddons/mithrilpf/total?style=for-the-badge&color=blue)
+
+
 
 </div>
 
