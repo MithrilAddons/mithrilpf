@@ -89,6 +89,27 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
 State clearly which checks were automated and which were performed in Minecraft;
 compilation alone does not establish gameplay accuracy or performance.
 
+## Native party finder
+
+Use isolated accounts and storage for API integration tests. Development launches
+may set `mithrilpf.testApi` to `http://127.0.0.1:<port>/api/v1/`; installed builds
+always use the production HTTPS origin, regardless of that property. Never put
+real sessions in synthetic fixtures.
+
+Check the four tabs at wide and compact GUI scales, keyboard focus and resource-pack
+fonts. Browse eligible and unavailable listings, explicitly choose a class, reserve
+against a concurrent reservation, and start/stop matching with a team-PB ceiling.
+Create and edit shared/class rules, duplicate roles and blocks. Restart to verify
+per-floor/account presets and check malformed-file preservation. Exercise removal,
+pause/resume, unlisting, confirmation cancellation and leadership changes.
+
+Exchange chat with a website client; verify Enter sends only from the chat field,
+new typing survives an earlier send, retries do not duplicate messages, and history
+scrolling stays put while reading older messages. Test reporting, mutes and expiry.
+Compare local and eligible records, match sounds, the search HUD, and sign-out during
+pending invites. Verify browser logout and native sign-out affect only their own
+session families, and account deletion revokes both.
+
 ## Qualifying PBs
 
 New soloclear PBs need a live backend start, five-second progress acknowledgements

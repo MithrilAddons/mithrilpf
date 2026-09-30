@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.party
 
+import dev.mithril.mithrilpf.account.DeviceSessionStore
 import dev.mithril.mithrilpf.account.LinkReceiptStore
 import dev.mithril.mithrilpf.account.LinkTransport
 import dev.mithril.mithrilpf.account.ServiceFailure
@@ -23,6 +24,8 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
         }
     private val store =
         LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json"))
+    private val devices =
+        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json"))
     private val flow = PartyFlow(LinkTransport::partyPost)
     private var renewChatAuth = false
     private val relay =
@@ -70,6 +73,8 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     private var pending: Future<*>? = null
     private var account = ""
     private var connection: Any? = null
+    private var nativeToken: String? = null
+    private var signingOut = false
     private var generation = 0
     private var busy = false
     private var nextPoll = 0L
@@ -128,17 +133,24 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
 
     fun sendChat(text: String) = relay.send(text)
 
-    fun tick() {
+    fun tick(deviceToken: String? = null, deviceSigningOut: Boolean = false) {
         val user = client.user
         val uuid = user.profileId.toString().replace("-", "")
         val activeConnection = client.connection
-        if (uuid != account || connection !== activeConnection) {
-            if (uuid != account) relay.update(null)
+        if (
+            uuid != account ||
+                connection !== activeConnection ||
+                nativeToken != deviceToken ||
+                signingOut != deviceSigningOut
+        ) {
+            relay.update(null)
             relay.tick(false)
             generation++
             pending?.cancel(true)
             account = uuid
             connection = activeConnection
+            nativeToken = deviceToken
+            signingOut = deviceSigningOut
             busy = false
             failures = 0
             party = null
@@ -150,6 +162,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
             nextPoll = 0
             nextRoster = 0
         }
+        if (signingOut) return
         val time = now()
         relay.tick(client.player != null && activeConnection != null)
         val inGame = online()
@@ -196,14 +209,13 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
             val result =
                 try {
                     if (renew) flow.clear()
-                    val receipt = store.load(uuid)
+                    val receipt = devices.load(uuid)?.receipt ?: store.load(uuid)?.token
                     if (receipt == null) {
                         flow.clear()
                         "unlinked"
                     } else {
                         reply =
-                            flow.exchange(uuid, user.name, receipt.token, inGame, outgoing) {
-                                serverId ->
+                            flow.exchange(uuid, user.name, receipt, inGame, outgoing) { serverId ->
                                 service.joinServer(user.profileId, user.accessToken, serverId)
                             }
                         chatAccess = flow.chatAccess()
@@ -256,6 +268,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     }
 
     private fun message(key: String) {
+        if (nativeToken != null && key in setOf("reserved", "full", "complete")) return
         client.player?.sendSystemMessage(Component.translatable("party.mithrilpf.$key"))
     }
 

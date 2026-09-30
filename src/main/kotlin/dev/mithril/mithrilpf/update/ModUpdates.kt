@@ -11,6 +11,9 @@ class ModUpdates(private val client: Minecraft) : AutoCloseable {
     val status: UpdateStatus
         get() = service.status
 
+    val cooldownSeconds: Long
+        get() = service.cooldownSeconds
+
     init {
         val loader = FabricLoader.getInstance()
         val container = loader.getModContainer("mithrilpf").orElseThrow()

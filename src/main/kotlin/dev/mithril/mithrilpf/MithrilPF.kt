@@ -3,12 +3,15 @@ package dev.mithril.mithrilpf
 import com.mojang.blaze3d.platform.InputConstants
 import com.mojang.brigadier.arguments.StringArgumentType
 import dev.mithril.mithrilpf.account.BrowserLink
+import dev.mithril.mithrilpf.account.NativeAccount
 import dev.mithril.mithrilpf.discord.DiscordActivityModel
 import dev.mithril.mithrilpf.discord.DiscordPresence
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
+import dev.mithril.mithrilpf.finder.FinderClient
 import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
+import dev.mithril.mithrilpf.ui.FinderNavigation
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
 import net.fabricmc.api.ClientModInitializer
@@ -27,6 +30,12 @@ import net.minecraft.resources.Identifier
 import org.lwjgl.glfw.GLFW
 
 object MithrilPF : ClientModInitializer {
+    lateinit var nativeAccount: NativeAccount
+        private set
+
+    lateinit var finder: FinderClient
+        private set
+
     private lateinit var browserLink: BrowserLink
     private lateinit var recordSync: RecordSync
     private lateinit var parties: PartyClient
@@ -43,10 +52,20 @@ object MithrilPF : ClientModInitializer {
         get() = if (::recordSync.isInitialized) recordSync.status else "waiting"
 
     private var openRequested = false
+    private val finderNavigation = FinderNavigation()
+
+    val partyHandoff
+        get() = if (::parties.isInitialized) parties.party else null
+
+    fun retryPartyInvites() {
+        if (::parties.isInitialized) parties.reinvite()
+    }
 
     override fun onInitializeClient() {
         val client = Minecraft.getInstance()
         browserLink = BrowserLink(client)
+        nativeAccount = NativeAccount(client)
+        finder = FinderClient(client, nativeAccount)
         recordSync = RecordSync(client)
         parties = PartyClient(client)
         discord = DiscordPresence()
@@ -57,6 +76,7 @@ object MithrilPF : ClientModInitializer {
             true
         }
         DungeonTimers.register()
+        dev.mithril.mithrilpf.ui.FinderHud.register()
         val key =
             KeyMappingHelper.registerKeyMapping(
                 KeyMapping(
@@ -104,8 +124,10 @@ object MithrilPF : ClientModInitializer {
             )
         }
         ClientTickEvents.END_CLIENT_TICK.register {
+            nativeAccount.tick()
+            finder.tick(client.screen is PartyFinderScreen)
             recordSync.tick()
-            parties.tick()
+            parties.tick(nativeAccount.session?.token, nativeAccount.status == "signing_out")
             updates.tick()
             val now = System.nanoTime()
             if (now >= nextDiscordUpdate) {
@@ -130,6 +152,8 @@ object MithrilPF : ClientModInitializer {
             }
         }
         ClientLifecycleEvents.CLIENT_STOPPING.register {
+            nativeAccount.close()
+            finder.close()
             browserLink.close()
             recordSync.close()
             parties.close()
@@ -138,5 +162,5 @@ object MithrilPF : ClientModInitializer {
         }
     }
 
-    fun screen(parent: Screen?): Screen = PartyFinderScreen(parent, browserLink)
+    fun screen(parent: Screen?): Screen = PartyFinderScreen(parent, browserLink, finderNavigation)
 }

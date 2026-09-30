@@ -16,9 +16,9 @@ and included in the gameplay JAR.
    [GitHub releases](https://github.com/MithrilAddons/mithrilpf/releases), remove
    any older MithrilPF JAR from `mods`, and put the new one there. Do not install
    the sources JAR. Restart Minecraft.
-4. Open `/mpf` (or `/mithrilpf`), choose Link browser, then use
-   [the party finder](https://mithril.foo/party-finder). Another browser or phone
-   can be linked using the QR/link/code options.
+4. Open `/mpf` (or `/mithrilpf`) and choose Sign in with Minecraft to use the
+   in-game finder. Settings also offers browser linking for
+   [the website finder](https://mithril.foo/party-finder), with QR/link/code options.
 
 `/mpc <message>` chats with your linked party on the website and in Minecraft.
 SS tracking is not included. Party listings and chat are temporary and reset when
@@ -49,7 +49,27 @@ Use the active game font and the shared Palette constants; no bundled fonts.
 ## Use and storage
 
 `/mithrilpf` (or `/mpf`) opens the menu; its Controls keybind starts unbound. Escape returns
-to gameplay. Mod Menu can also open settings.
+to the previous screen or gameplay. Mod Menu can also open the menu. Parties shows
+authenticated F7/M7 listings, eligibility, class selection, automatic matching and
+party creation. Your party contains the roster, handoff, chat and leader controls.
+Records separates eligible records from local PBs. Settings contains account controls,
+tracking, HUD editing, match sounds, Discord and updates.
+Tab moves focus and Enter/Space activates the focused control. Content scrolls when
+it does not fit the selected GUI scale.
+Wide layouts use independent list and detail panes; compact layouts open details
+with a Back action. Reservations always use an explicitly selected class. Leaving,
+unlisting and removing members require confirmation. Chat supports Enter to send
+and reporting a message with a reason. Requirement fields never submit on Enter.
+Successful creation and edits remember requirements and role layouts per account
+and floor in `config/mithrilpf/finder.json`. Blocked-player names and chat drafts
+are not saved there. Invalid or newer configuration files are kept unchanged.
+Sign in with Minecraft creates a separate 30-day mod session using a fresh Mojang
+ownership proof. Minecraft access tokens are sent only to Mojang. The mod saves its
+credential and scoped-proof receipt per account in `config/mithrilpf/device.json`.
+Sign out revokes that session; the website's Manage data page can revoke other
+Minecraft sessions. Account deletion revokes all sessions. Browser linking remains
+available independently. Tracking and party handoff prefer the native session when
+present; otherwise they use the existing browser link.
 Browser linking proves ownership through Mojang and opens an HTTPS confirmation
 page. Only Mojang receives the Minecraft access token. A status-only receipt is
 saved per account in instance-local `config/mithrilpf/link.json`; it cannot log
@@ -87,7 +107,7 @@ create releases.
 
 ## Automatic updates
 
-Open `/mpf → Updates`. Auto-update defaults on; **Include pre-releases** defaults
+Open `/mpf → Settings`. Auto-update defaults on; **Include pre-releases** defaults
 off. Only JARs built by this repository's tagged **Release** workflow can self-update.
 Local builds and PR artifacts are marked local: they never check, download or install
 updates, even if a newer remote version exists. This protects local commits/dirty
@@ -167,10 +187,10 @@ IPC runs off the client thread with bounded frames, five-second exchanges, rate
 limiting and reconnect backoff. Windows named pipes and standard Unix sockets are
 supported; sandboxed Discord clients that hide their IPC endpoint may not connect.
 
-The mod syncs solo-clear and terminal PBs using a fresh Mojang proof and a separate
-15-minute upload credential. Only best timings are uploaded, not room records or
-full run history. Browser logout revokes uploads but does not delete saved records.
-Sync is bounded, retries outages and separates accounts. SS tracking is not implemented.
+The mod submits live solo-clear evidence and terminal reports using a fresh Mojang
+proof and a separate 15-minute credential. Local PBs survive failed qualification.
+Signing out revokes credentials derived from that session without deleting saved
+records. Sync is bounded, retries outages and separates accounts. SS tracking is not implemented.
 
 Party handoff uses a separate 30-day presence credential; it cannot upload records
 or log into the browser. All five must be online before one automatic invite round.

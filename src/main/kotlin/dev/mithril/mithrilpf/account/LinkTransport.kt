@@ -1,6 +1,7 @@
 package dev.mithril.mithrilpf.account
 
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -10,8 +11,16 @@ import java.time.Duration
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.Flow
 import java.util.concurrent.TimeUnit
+import net.fabricmc.loader.api.FabricLoader
 
 object LinkTransport {
+    internal fun origin(development: Boolean, override: String?): String {
+        if (!development || override == null) return "https://mithril.foo/api/v1/"
+        require(override.matches(Regex("http://127\\.0\\.0\\.1:[0-9]{1,5}/api/v1/")))
+        require(URI(override).port in 1..65535)
+        return override
+    }
+
     fun post(path: String, body: JsonObject): String {
         require(path in setOf("challenge", "verify", "link-status"))
         return request("auth/$path", body, null)
@@ -50,26 +59,66 @@ object LinkTransport {
         return request("party/mod/chat/$path", body, token, 262144, if (path == "state") 35 else 12)
     }
 
+    fun finderRequest(path: String, body: JsonObject?, token: String?): String {
+        val proof = path in setOf("auth/device-challenge", "auth/device-verify")
+        val allowed =
+            path in
+                setOf(
+                    "auth/device-session",
+                    "auth/device-logout",
+                    "auth/device-player-card",
+                    "auth/device-erase",
+                    "party/client/state",
+                    "party/client/look",
+                    "party/client/stop-looking",
+                    "party/client/reserve",
+                    "party/client/leave",
+                    "party/client/publish",
+                    "party/client/edit",
+                    "party/client/pause",
+                    "party/client/unlist",
+                    "party/client/remove",
+                    "party/client/chat",
+                    "party/client/chat/report",
+                    "party/client/listings?floor=F7",
+                    "party/client/listings?floor=M7",
+                ) || path.matches(Regex("party/client/listings/[A-Za-z0-9_-]{12}"))
+        require(proof || allowed)
+        require(proof == (token == null))
+        if (token != null) require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return request(path, body, token, 1048576, if (path == "party/client/state") 35 else 12)
+    }
+
     private fun request(
         path: String,
-        body: JsonObject,
+        body: JsonObject?,
         token: String?,
         limit: Int = 16384,
         timeout: Long = 12,
     ): String {
-        require(body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
+        require(body == null || body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build()
             .use { client ->
                 val request =
-                    HttpRequest.newBuilder(URI("https://mithril.foo/api/v1/$path"))
+                    HttpRequest.newBuilder(
+                            URI(
+                                origin(
+                                    FabricLoader.getInstance().isDevelopmentEnvironment,
+                                    System.getProperty("mithrilpf.testApi"),
+                                ) + path
+                            )
+                        )
                         .timeout(Duration.ofSeconds(timeout))
                         .header("Content-Type", "application/json")
                         .header("Accept", "application/json")
                         .apply { if (token != null) header("Authorization", "Bearer $token") }
-                        .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                        .apply {
+                            if (body == null) GET()
+                            else POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                        }
                         .build()
                 val pending = client.sendAsync(request) { BoundedBody(limit) }
                 val response =
@@ -79,10 +128,33 @@ object LinkTransport {
                         pending.cancel(true)
                         client.shutdownNow()
                     }
-                if (response.statusCode() != 200) throw ServiceFailure(response.statusCode())
+                if (response.statusCode() != 200)
+                    throw ServiceFailure(response.statusCode(), failureReason(response.body()))
                 return response.body()
             }
     }
+
+    internal fun failureReason(body: String): String? = runCatching {
+        val detail = JsonParser.parseString(body).asJsonObject.get("detail")
+        val value =
+            if (detail.isJsonObject) detail.asJsonObject.get("code").asString else detail.asString
+        when (value) {
+            "Chat muted" -> "muted"
+            "Account or connection banned",
+            "banned" -> "banned"
+            "slot_taken",
+            "party_full",
+            "not_found" -> "slot_taken"
+            "not_eligible" -> "not_eligible"
+            "stats_unavailable" -> "stats_unavailable"
+            "not_leader",
+            "not_in_party",
+            "in_party" -> "changed"
+            "unknown_names" -> "unknown_names"
+            else -> null
+        }
+    }
+        .getOrNull()
 
     /** Bounds allocation as data arrives, rather than after receiving the body. */
     private class BoundedBody(private val limit: Int) : HttpResponse.BodySubscriber<String> {
@@ -115,4 +187,5 @@ object LinkTransport {
     }
 }
 
-class ServiceFailure(val statusCode: Int) : Exception("Mithril service unavailable")
+class ServiceFailure(val statusCode: Int, val reason: String? = null) :
+    Exception("Mithril service unavailable")
