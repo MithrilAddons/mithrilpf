@@ -64,3 +64,12 @@ jobs:
             !build/libs/*-sources.jar
           retention-days: 14
           if-no-files-found: error
+      - name: SonarQube analysis
+        if: >-
+          matrix.os == 'ubuntu-24.04' && github.ref_type != 'tag' &&
+          github.actor != 'dependabot[bot]' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: sh gradlew sonar -Dsonar.qualitygate.wait=true --console=plain
