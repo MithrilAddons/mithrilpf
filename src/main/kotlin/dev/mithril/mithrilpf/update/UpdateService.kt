@@ -49,6 +49,13 @@ internal class UpdateService(
     var status = UpdateStatus()
         private set
 
+    val cooldownSeconds: Long
+        get() =
+            if (lastCheck == Long.MIN_VALUE) 0
+            else
+                ((TimeUnit.MINUTES.toNanos(1) - (System.nanoTime() - lastCheck)).coerceAtLeast(0) +
+                    999_999_999L) / 1_000_000_000L
+
     init {
         submit(null)
     }

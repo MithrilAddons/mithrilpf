@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.sync
 
+import dev.mithril.mithrilpf.account.DeviceSessionStore
 import dev.mithril.mithrilpf.account.LinkReceiptStore
 import dev.mithril.mithrilpf.account.LinkTransport
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
@@ -18,6 +19,8 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
         }
     private val store =
         LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json"))
+    private val devices =
+        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json"))
     private val flow = RecordSyncFlow(LinkTransport::syncPost)
     private val live = LiveRecordFlow(LinkTransport::syncPost)
     private var pending: Future<*>? = null
@@ -55,8 +58,8 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
                 worker.submit {
                     val result =
                         try {
-                            val receipt = store.load(uuid)
-                            flow.process(uuid, user.name, receipt?.token, event, live) { serverId ->
+                            val receipt = devices.load(uuid)?.receipt ?: store.load(uuid)?.token
+                            flow.process(uuid, user.name, receipt, event, live) { serverId ->
                                 service.joinServer(user.profileId, user.accessToken, serverId)
                             }
                         } catch (_: Exception) {

@@ -31,6 +31,8 @@ class TrackingSettingsTest {
                 HudPosition(1.0, 0.0, 0.5),
                 HudPosition(0.3, 0.7, 3.0),
                 false,
+                false,
+                false,
             )
         store.save(value)
         assertEquals(value, TrackingSettingsStore(file).load())
