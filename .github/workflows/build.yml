@@ -72,4 +72,4 @@ jobs:
           github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: sh gradlew sonar -Dsonar.qualitygate.wait=true --console=plain
+        run: sh gradlew sonar -Dsonar.qualitygate.wait=true --info --console=plain

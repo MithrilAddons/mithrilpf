@@ -27,6 +27,12 @@ their merged code is analyzed on main. Release tag builds do not submit analyses
 For a local scan, supply `SONAR_TOKEN` through the environment and run
 `gradlew.bat build sonar` (Linux: `sh gradlew build sonar`).
 
+Gradle checks dependency and plugin artifacts against the SHA-256 values in
+`gradle/verification-metadata.xml`. When updating dependencies, regenerate the
+metadata with `gradlew.bat --write-verification-metadata sha256 build sonarResolver`
+and review the changed artifacts and their provenance before committing it.
+Do not disable verification or accept an unexplained checksum mismatch.
+
 ## Manual regression checks
 
 - Discord: start with Discord closed, then open/restart it. Check `/mpf`'s Rich
