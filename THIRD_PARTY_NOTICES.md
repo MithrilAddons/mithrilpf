@@ -20,17 +20,15 @@ not shipped: https://github.com/zxing/zxing.
 
 ## Dungeon tracking
 
-The timer and solo-room implementation and regression tests were extracted from
-the owner's MithrilAddons project. Split boundaries, boss bounds, ping selection,
-room-core hashing, map calibration and participant recognition derive from
+Split boundaries, boss bounds, ping selection, room-core hashing, map calibration
+and participant recognition derive from
 [NoammAddons](https://github.com/Noamm9/NoammAddons/tree/624065809db7c70ef7125cbe8ceb4a66f0c565e0),
 by Noamm9 and contributors, under CC0-1.0. The standalone score calculation is
 adapted from that revision's `ScoreCalculation.kt` and `DungeonListener.kt`.
 The license is in `LICENSES/LICENSE_noamm` and packaged under `META-INF/licenses`.
 
-`dungeon-splits.json` and `solo-rooms.json` are the same reduced factual snapshots
-used by MithrilAddons (Noamm 1.2.6, September 2026). Room data contains names,
-types, hashes and secret counts, not player data or secret routes. No Noamm,
-SkyHanni or Skyblocker code is loaded or reflected into at runtime. Original
-MithrilPF code in this repository is licensed under MIT; see LICENSE.
+`dungeon-splits.json` and `solo-rooms.json` contain reduced factual snapshots
+from Noamm 1.2.6. Room data contains names, types, hashes and secret counts,
+not player data or secret routes. Original MithrilPF code in this repository is
+licensed under MIT; see LICENSE.
 Third-party components retain their respective licenses listed above.

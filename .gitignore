@@ -23,7 +23,6 @@ CLAUDE.md
 .codex/
 .local/
 config/
-# Keep plans, session notes and detailed feature checklists local.
 docs/*.md
 !docs/DEVELOPMENT.md
 !docs/TESTING.md

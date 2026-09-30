@@ -3,8 +3,8 @@
 Run `gradlew.bat spotlessApply` (`sh gradlew spotlessApply` on Linux), then
 `python tools/check.py`. The script verifies wrapper integrity, JSON keys,
 branch policy, formatting, JVM tests and packaged-JAR metadata/entrypoints.
-Only the reviewed DungeonConnectionMixin packet hook is allowed. Its class and
-the adapted code's CC0 notice must be present in the JAR. The package guard also
+The package guard allows only the DungeonConnectionMixin packet hook. Its class
+and the adapted code's CC0 notice must be present in the JAR. The guard also
 checks MIT metadata and that the packaged project license matches LICENSE.
 
 Tests use temporary directories and redirected user directories, never live
@@ -49,8 +49,7 @@ Build/package guards are not malware scanning or proof of runtime correctness.
   clocks during lag, normal/master separation and abandoned-run handling.
 - Clear a room, leave, return for secrets: only time in that room counts.
 - Compare solo 300-score detection against server observations with and without
-  Paul; test death and teammate invalidation. The owner confirmed successful
-  live 300-score detection on 2026-09-26; that is not coverage of every modifier.
+  Paul; test death and teammate invalidation.
 - Complete qualifying runs and verify history, three-sample estimates and fallback.
 - Sync an existing and improved PB; check account separation, restart, logout and
   temporary failure. Compare the website card. Room/history data must stay local.
@@ -62,9 +61,7 @@ Build/package guards are not malware scanning or proof of runtime correctness.
   after the full party has joined Minecraft. Check one echo per send, server hops,
   logout/removal, account switches, slow requests and rate limits. Retry a failed
   send by clicking its notice. Confirm `/pc` and ordinary chat are not relayed,
-  and command-looking incoming text never executes. New chat has not yet had
-  owner-run Minecraft verification; the automated relay tests use fakes only.
+  and command-looking incoming text never executes. Automated relay tests use fakes only.
 
-Keep session-specific results and outstanding test notes local. State clearly
-which checks were automated and which were performed in Minecraft; compilation
-alone does not establish gameplay accuracy or performance.
+State clearly which checks were automated and which were performed in Minecraft;
+compilation alone does not establish gameplay accuracy or performance.

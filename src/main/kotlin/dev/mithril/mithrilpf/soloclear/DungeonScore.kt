@@ -3,9 +3,8 @@ package dev.mithril.mithrilpf.soloclear
 import kotlin.math.floor
 
 /**
- * Local projected F7/M7 score, including unfinished blood/boss as in the old calculator. Adapted
- * from Noamm (CC0); no player chat claims, remote code or optional mod state. Missing mandatory
- * fields mean unknown, never a guessed 300.
+ * Local projected F7/M7 score, including unfinished blood/boss. Adapted from Noamm (CC0). Missing
+ * mandatory fields mean unknown, never a guessed 300.
  */
 class DungeonScore {
     private var completed: Int? = null
