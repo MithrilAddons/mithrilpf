@@ -2,8 +2,12 @@ package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dev.mithril.mithrilpf.dungeontimer.DungeonTimerState
 import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
+import dev.mithril.mithrilpf.soloclear.DungeonScore
+import dev.mithril.mithrilpf.soloclear.SoloClearState
+import java.util.UUID
 import kotlin.test.*
 
 class RecordCaptureTest {
@@ -18,6 +22,37 @@ class RecordCaptureTest {
 
     private fun progress(seconds: Long, status: String? = "tracking", complete: Boolean = false) =
         capture.progress(stamp(seconds), status == "death", status, JsonObject(), complete)
+
+    @Test
+    fun `tab capture filters nonparticipants and snapshots score only when a sample is due`() {
+        val self = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")
+        val other = UUID.fromString("11234567-89ab-cdef-0123-456789abcdef")
+        capture.observeTab(mapOf(self to "[30] Player (Mage XX)", other to "Secrets Found: 20%"))
+        val state = SoloClearState("Player")
+        state.begin("F7", stamp(10))
+        val score = DungeonScore()
+        capture.sample(stamp(10), false, state, score, null)
+        assertNull(capture.poll())
+        begin()
+        body()
+        capture.sample(stamp(14), false, state, score, null)
+        assertNull(capture.poll())
+        capture.sample(stamp(15), false, state, score, null)
+        val sample = body()
+        assertEquals(
+            listOf(self.toString().replace("-", "")),
+            sample["roster"].asJsonArray.map { it.asString },
+        )
+        assertFalse(sample["evidence"].asJsonObject["in_boss"].asBoolean)
+        val timer = DungeonTimerState("F7", emptyList())
+        capture.sample(stamp(20), false, state, score, timer)
+        assertFalse(body()["evidence"].asJsonObject["in_boss"].asBoolean)
+        timer.completed["Boss Entry"] = SplitTime(100, 2)
+        capture.sample(stamp(21), false, null, score, timer, complete = true)
+        val end = body()
+        assertTrue(end["evidence"].asJsonObject["in_boss"].asBoolean)
+        assertFalse(end["valid"].asBoolean)
+    }
 
     @Test
     fun `capture samples every five seconds and preserves completion between samples`() {

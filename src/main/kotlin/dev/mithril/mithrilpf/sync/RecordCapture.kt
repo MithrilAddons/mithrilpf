@@ -2,8 +2,12 @@ package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import dev.mithril.mithrilpf.dungeontimer.DungeonTimerState
 import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
+import dev.mithril.mithrilpf.soloclear.DungeonScore
+import dev.mithril.mithrilpf.soloclear.SoloClearState
+import dev.mithril.mithrilpf.soloroom.SoloRoomState
 import java.util.UUID
 
 /** Client-thread capture, independent of Minecraft so complete event timelines can be tested. */
@@ -32,6 +36,32 @@ class RecordCapture {
 
     fun observeRoster(players: Collection<String>) {
         roster.addAll(players)
+    }
+
+    fun observeTab(tab: Map<UUID, String>) {
+        observeRoster(
+            tab.filterValues { SoloRoomState.participant(it) != null }
+                .keys
+                .map { it.toString().replace("-", "") }
+        )
+    }
+
+    fun sample(
+        stamp: TimerStamp,
+        dead: Boolean,
+        state: SoloClearState?,
+        score: DungeonScore,
+        timer: DungeonTimerState?,
+        complete: Boolean = false,
+    ) {
+        if (!solo || (!complete && stamp.nanos < nextSample)) return
+        progress(
+            stamp,
+            dead,
+            state?.status,
+            score.evidence(timer?.completed?.containsKey("Boss Entry") == true),
+            complete,
+        )
     }
 
     fun begin(

@@ -58,15 +58,6 @@ object DungeonTimers {
 
     fun clearSyncEvents() = recordCapture.clearEvents()
 
-    private fun syncProgress(stamp: TimerStamp, complete: Boolean = false) =
-        recordCapture.progress(
-            stamp,
-            ghost,
-            solo?.status,
-            score.evidence(state?.completed?.containsKey(BOSS_ENTRY) == true),
-            complete,
-        )
-
     var settings = TrackingSettings()
         private set
 
@@ -251,7 +242,7 @@ object DungeonTimers {
                 log.warn("Room tracking stopped for this run", e)
             }
         } else rooms?.leave(stamp)
-        syncProgress(stamp)
+        recordCapture.sample(stamp, ghost, solo, score, state)
         if (settings.solo && solo?.active == true) {
             val timer = state ?: return
             val elapsed = timer.rows(stamp)["Total"] ?: return
@@ -268,7 +259,7 @@ object DungeonTimers {
                     stamp,
                 )
                 ?.let { time ->
-                    syncProgress(stamp, complete = true)
+                    recordCapture.sample(stamp, ghost, solo, score, state, complete = true)
                     record("solo", mapOf("300 Score" to time))
                 }
         }
@@ -325,11 +316,7 @@ object DungeonTimers {
                     entries.forEach { (id, text) ->
                         if (text == null) tab.remove(id) else tab[id] = text
                     }
-                    recordCapture.observeRoster(
-                        tab.filterValues { SoloRoomState.participant(it) != null }
-                            .keys
-                            .map { it.toString().replace("-", "") }
-                    )
+                    recordCapture.observeTab(tab)
                     val participants = tab.values.mapNotNull(SoloRoomState::participant)
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
@@ -383,11 +370,7 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
-            recordCapture.observeRoster(
-                tab.filterValues { SoloRoomState.participant(it) != null }
-                    .keys
-                    .map { it.toString().replace("-", "") }
-            )
+            recordCapture.observeTab(tab)
             recordCapture.begin(
                 floor,
                 stamp,
