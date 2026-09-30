@@ -32,6 +32,9 @@ Gradle checks dependency and plugin artifacts against the SHA-256 values in
 metadata with `gradlew.bat --write-verification-metadata sha256 build sonarResolver`
 and review the changed artifacts and their provenance before committing it.
 Do not disable verification or accept an unexplained checksum mismatch.
+The exact locally generated Minecraft JAR is exempt because Loom's processed
+output differs between builds; Loom verifies the original downloads against
+Mojang's hashes. This exception does not apply to downloaded libraries or plugins.
 
 ## Manual regression checks
 

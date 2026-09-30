@@ -86,7 +86,7 @@ sonar {
         property 'sonar.projectKey', 'MithrilAddons_mithrilpf'
         property 'sonar.organization', 'mithriladdons'
         property 'sonar.sourceEncoding', 'UTF-8'
-        property 'sonar.sources', 'src/main,src/updater,tools,.github,build.gradle,settings.gradle'
+        property 'sonar.sources', 'src/main,src/updater,tools,.github,build.gradle,settings.gradle,gradle/verification-metadata.xml'
         property 'sonar.tests', 'src/test,tools/tests'
         property 'sonar.exclusions', 'src/main/resources/assets/mithrilpf/icon.png,tools/tests/**'
         property 'sonar.java.binaries', files(sourceSets.main.output.classesDirs, sourceSets.updater.output.classesDirs)
