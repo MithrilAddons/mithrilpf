@@ -28,6 +28,8 @@
   "party.mithrilpf.reserved": "MithrilPF: your party slot is held. See mithril.foo/party-finder for the roster.",
   "party.mithrilpf.inviting": "MithrilPF: sending invites. Use /mithrilpfreinvite to retry missing players.",
   "party.mithrilpf.complete": "MithrilPF: everyone joined. Finder listing closed.",
+  "screen.mithrilpf.sync.tracking": "Soloclear live tracking active",
+  "screen.mithrilpf.sync.local_only": "This attempt is saved locally only",
   "screen.mithrilpf.sync.waiting": "Record sync: waiting",
   "screen.mithrilpf.sync.no_records": "Record sync: no PBs yet",
   "screen.mithrilpf.sync.unlinked": "Record sync: link your browser first",

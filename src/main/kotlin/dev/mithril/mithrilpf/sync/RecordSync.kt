@@ -19,6 +19,7 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
     private val store =
         LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json"))
     private val flow = RecordSyncFlow(LinkTransport::syncPost)
+    private val live = LiveRecordFlow(LinkTransport::syncPost)
     private var pending: Future<*>? = null
     private var account = ""
     private var generation = 0
@@ -39,14 +40,12 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
             busy = false
             failures = 0
             status = "waiting"
+            DungeonTimers.clearSyncEvents()
         }
-        if (busy || System.nanoTime() < nextCheck || !DungeonTimers.ready) return
+        if (busy || !DungeonTimers.ready) return
+        val event = DungeonTimers.pollSyncEvent()
+        if (event == null && System.nanoTime() < nextCheck) return
         nextCheck = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
-        val snapshot = DungeonTimers.syncSnapshot(user.profileId.toString())
-        if (snapshot.records.isEmpty()) {
-            status = "no_records"
-            return
-        }
         val service = client.services().sessionService()
         val attempt = generation
         busy = true
@@ -57,23 +56,33 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
                     val result =
                         try {
                             val receipt = store.load(uuid)
-                            if (receipt == null) {
+                            if (event != null && !live.accepts(event)) {
+                                "local_only"
+                            } else if (receipt == null) {
                                 flow.clear()
+                                live.clear()
                                 "unlinked"
                             } else {
-                                flow.sync(uuid, user.name, receipt.token, snapshot) { serverId ->
-                                    service.joinServer(user.profileId, user.accessToken, serverId)
-                                }
-                                "synced"
+                                val credential =
+                                    flow.authenticate(uuid, user.name, receipt.token) { serverId ->
+                                        service.joinServer(
+                                            user.profileId,
+                                            user.accessToken,
+                                            serverId,
+                                        )
+                                    }
+                                if (event == null) null else live.send(event, credential)
                             }
                         } catch (_: Exception) {
                             // Never log exceptions: HTTP/proof failures can include credentials.
+                            flow.clear()
+                            live.clear()
                             "unavailable"
                         }
                     client.execute {
                         if (generation == attempt) {
                             busy = false
-                            status = result
+                            if (result != null) status = result
                             failures =
                                 if (result == "unavailable") (failures + 1).coerceAtMost(4) else 0
                             val delay = if (failures == 0) 30L else minOf(300L, 30L shl failures)

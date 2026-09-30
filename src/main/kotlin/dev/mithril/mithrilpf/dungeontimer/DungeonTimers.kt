@@ -1,10 +1,13 @@
 package dev.mithril.mithrilpf.dungeontimer
 
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.UUID
@@ -49,6 +52,53 @@ object DungeonTimers {
     private var detector = RoomDetector()
     private var score = DungeonScore()
     private val tab = linkedMapOf<UUID, String>()
+    private val syncEvents = ArrayDeque<RecordEvent>()
+    private val syncRoster = linkedSetOf<String>()
+    private var syncStart: TimerStamp? = null
+    private var syncRun = 0L
+    private var syncStartedMillis = 0L
+    private var nextSyncSample = 0L
+    private var syncSolo = false
+
+    fun pollSyncEvent(): RecordEvent? = syncEvents.removeFirstOrNull()
+
+    fun clearSyncEvents() = syncEvents.clear()
+
+    private fun syncEvent(path: String, body: JsonObject, stamp: TimerStamp) {
+        if (syncEvents.size >= 8) {
+            syncEvents.clear()
+            syncSolo = false
+            return
+        }
+        body.addProperty("version", 2)
+        syncEvents.addLast(RecordEvent(syncRun, path, body.toString(), stamp.nanos))
+    }
+
+    private fun syncProgress(stamp: TimerStamp, complete: Boolean = false) {
+        if (!syncSolo) return
+        val start = syncStart ?: return
+        if (!complete && stamp.nanos < nextSyncSample) return
+        nextSyncSample = stamp.nanos + 5_000_000_000L
+        val elapsed = stamp - start
+        syncEvent(
+            "solo-progress",
+            JsonObject().apply {
+                addProperty("elapsed_ms", elapsed.realMillis)
+                addProperty("ticks", elapsed.ticks)
+                add("roster", JsonArray().apply { syncRoster.sorted().forEach(::add) })
+                addProperty("dead", ghost)
+                addProperty(
+                    "valid",
+                    solo?.status in setOf("tracking", "awaiting_roster", "completed"),
+                )
+                add("evidence", score.evidence(state?.completed?.containsKey("Boss Entry") == true))
+                addProperty("complete", complete)
+            },
+            stamp,
+        )
+        if (complete || solo?.active != true) syncSolo = false
+    }
+
     var settings = TrackingSettings()
         private set
 
@@ -158,12 +208,16 @@ object DungeonTimers {
         ghost = false
         tab.clear()
         score = DungeonScore()
+        syncStart = null
+        syncRoster.clear()
+        syncSolo = false
         detector = RoomDetector()
         rooms = client.player?.gameProfile?.name?.let(::SoloRoomState)
         solo = client.player?.gameProfile?.name?.let(::SoloClearState)
     }
 
     private fun invalidate() {
+        syncSolo = false
         stopped = true
         capture = null
         state = null
@@ -231,6 +285,7 @@ object DungeonTimers {
                 log.warn("Room tracking stopped for this run", e)
             }
         } else rooms?.leave(stamp)
+        syncProgress(stamp)
         if (settings.solo && solo?.active == true) {
             val timer = state ?: return
             val elapsed = timer.rows(stamp)["Total"] ?: return
@@ -247,6 +302,7 @@ object DungeonTimers {
                     stamp,
                 )
                 ?.let { time ->
+                    syncProgress(stamp, complete = true)
                     record("solo", mapOf("300 Score" to time))
                 }
         }
@@ -303,6 +359,9 @@ object DungeonTimers {
                     entries.forEach { (id, text) ->
                         if (text == null) tab.remove(id) else tab[id] = text
                     }
+                    tab.filterValues { SoloRoomState.participant(it) != null }
+                        .keys
+                        .forEach { syncRoster.add(it.toString().replace("-", "")) }
                     val participants = tab.values.mapNotNull(SoloRoomState::participant)
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
@@ -356,6 +415,28 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
+            syncRun++
+            syncStart = stamp
+            syncStartedMillis = System.currentTimeMillis()
+            syncRoster.addAll(
+                tab.filterValues { SoloRoomState.participant(it) != null }
+                    .keys
+                    .map { it.toString().replace("-", "") }
+            )
+            syncSolo = floor in setOf("F7", "M7") && settings.solo && solo?.active == true
+            nextSyncSample = stamp.nanos + 5_000_000_000L
+            if (syncSolo)
+                syncEvent(
+                    "solo-start",
+                    JsonObject().apply {
+                        addProperty("floor", floor)
+                        addProperty("elapsed_ms", 0)
+                        addProperty("ticks", 0)
+                        addProperty("paul", settings.paul)
+                    },
+                    stamp,
+                )
+
             state = DungeonTimerState(floor, splits)
             val required =
                 setOf("Blood Open", "Watcher Clear", "Total") +
@@ -398,6 +479,22 @@ object DungeonTimers {
         val client = Minecraft.getInstance()
         val player = client.player?.uuid?.toString() ?: return
         val floor = floor ?: return
+        times["Terminals"]
+            ?.takeIf { floor in setOf("F7", "M7") && syncStart != null && syncRoster.isNotEmpty() }
+            ?.let { time ->
+                syncEvent(
+                    "terminal-report",
+                    JsonObject().apply {
+                        addProperty("report_id", UUID.randomUUID().toString().replace("-", ""))
+                        addProperty("floor", floor)
+                        addProperty("run_started_ms", syncStartedMillis)
+                        add("roster", JsonArray().apply { syncRoster.sorted().forEach(::add) })
+                        addProperty("real_ms", time.realMillis)
+                        addProperty("ticks", time.ticks)
+                    },
+                    now(),
+                )
+            }
         storage.record(kind, player, floor, times) { old, changed ->
             if (client.player?.uuid?.toString() != player) return@record
             changed.forEach { (name, time) ->

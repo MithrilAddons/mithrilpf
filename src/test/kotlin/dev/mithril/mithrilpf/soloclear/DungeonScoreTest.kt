@@ -1,8 +1,45 @@
 package dev.mithril.mithrilpf.soloclear
 
+import com.google.gson.JsonParser
 import kotlin.test.*
 
 class DungeonScoreTest {
+    @Test
+    fun `backend score and serialized evidence share the same vectors`() {
+        val cases =
+            JsonParser.parseString(
+                    javaClass.getResource("/contracts/solo-score-v2.json")!!.readText()
+                )
+                .asJsonArray
+        for (item in cases) {
+            val case = item.asJsonObject
+            val evidence = case.getAsJsonObject("evidence")
+            val state = DungeonScore()
+            state.start()
+            state.sidebar(listOf("Cleared: ${evidence["cleared"].asInt}% (0)"))
+            val lines =
+                mutableListOf(
+                    "Completed Rooms: ${evidence["completed"].asInt}",
+                    "Crypts: ${evidence["crypts"].asInt}",
+                    "Puzzles: (${evidence["puzzles"].asInt})",
+                )
+            if (!evidence["secrets"].isJsonNull)
+                lines += "Secrets Found: ${evidence["secrets"].asDouble}%"
+            repeat(evidence["solved"].asInt) { lines += "Puzzle$it: [✔]" }
+            state.tab(lines)
+            state.mimic = evidence["mimic"].asBoolean
+            if (evidence["prince"].asBoolean) state.chat("A prince falls. +1 bonus score")
+            if (evidence["bat"].asBoolean) state.chat("A bat has been slain. +1 bonus score")
+            val inBoss = evidence["in_boss"].asBoolean
+            assertEquals(evidence, state.evidence(inBoss))
+            assertEquals(
+                case["score"].takeUnless { it.isJsonNull }?.asInt,
+                state.estimate(case["elapsed_ms"].asLong / 1000, inBoss, case["paul"].asBoolean),
+                case["name"].asString,
+            )
+        }
+    }
+
     private fun score(
         completed: Int = 18,
         cleared: Int = 90,

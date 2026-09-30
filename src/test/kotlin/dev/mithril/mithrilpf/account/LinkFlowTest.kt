@@ -17,19 +17,25 @@ class LinkFlowTest {
     @Test
     fun `proves ownership before requesting a fixed origin fragment link`() {
         val calls = mutableListOf<String>()
+        var expectedProof = ""
         val flow = LinkFlow { path, body ->
             calls.add(path)
             if (path == "challenge") {
-                assertEquals(setOf("version", "uuid", "name"), body.keySet())
+                assertEquals(setOf("version", "uuid", "name", "client_nonce"), body.keySet())
                 assertEquals(uuid, body["uuid"].asString)
-                challenge
+                proofFixture(body, "link", token).also {
+                    expectedProof =
+                        com.google.gson.JsonParser.parseString(it)
+                            .asJsonObject["server_id"]
+                            .asString
+                }
             } else {
                 assertEquals(setOf("challenge_id"), body.keySet())
                 verified
             }
         }
         val issued = flow.run(uuid, "TestPlayer") { calls.add("prove:$it") }
-        assertEquals(listOf("challenge", "prove:$serverId", "verify"), calls)
+        assertEquals(listOf("challenge", "prove:$expectedProof", "verify"), calls)
         assertEquals("https://mithril.foo/link#$token", issued.uri.toString())
         assertNull(issued.receipt)
     }
@@ -54,9 +60,9 @@ class LinkFlowTest {
     fun `failed ownership never requests a browser token`() {
         var count = 0
         assertFails {
-            LinkFlow { _, _ ->
+            LinkFlow { _, body ->
                     count++
-                    challenge
+                    proofFixture(body, "link", token)
                 }
                 .run(uuid, "Player") { error("Rejected") }
         }
@@ -65,8 +71,9 @@ class LinkFlowTest {
 
     @Test
     fun `invalid link cannot select an arbitrary destination`() {
-        val flow = LinkFlow { path: String, _: JsonObject ->
-            if (path == "challenge") challenge else verified.replace(token, "//evil.invalid")
+        val flow = LinkFlow { path: String, body: JsonObject ->
+            if (path == "challenge") proofFixture(body, "link", token)
+            else verified.replace(token, "//evil.invalid")
         }
         assertFails { flow.run(uuid, "Player") {} }
     }
@@ -102,8 +109,8 @@ class LinkFlowTest {
     @Test
     fun `receipt is separate from browser link and validated`() {
         val receipt = "c".repeat(43)
-        fun run(value: String) = LinkFlow { path, _ ->
-            if (path == "challenge") challenge
+        fun run(value: String) = LinkFlow { path, body ->
+            if (path == "challenge") proofFixture(body, "link", token)
             else verified.dropLast(1) + """, "receipt_token":"$value"}"""
         }
             .run(uuid, "Player") {}
@@ -114,8 +121,9 @@ class LinkFlowTest {
 
     @Test
     fun `short code and deadline are validated without breaking old servers`() {
-        fun run(extra: String) = LinkFlow { path, _ ->
-            if (path == "challenge") challenge else verified.dropLast(1) + extra + "}"
+        fun run(extra: String) = LinkFlow { path, body ->
+            if (path == "challenge") proofFixture(body, "link", token)
+            else verified.dropLast(1) + extra + "}"
         }
             .run(uuid, "Player") {}
         val issued = run(""", "user_code":"ABCD-EFGH", "expires_in_seconds":300""")

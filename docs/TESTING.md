@@ -88,3 +88,23 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
 
 State clearly which checks were automated and which were performed in Minecraft;
 compilation alone does not establish gameplay accuracy or performance.
+
+## Qualifying PBs
+
+New soloclear PBs need a live backend start, five-second progress acknowledgements
+and a qualifying finish. Check F7/M7, delayed rosters, another player joining then
+leaving, death, Paul changes, disconnects and server restart. Local PBs must survive
+failed qualification. Verify no network or disk I/O happens in timer callbacks.
+The shared solo-score-v2.json vectors check projected-score parity with the backend.
+
+Terminal PBs remain eligible with one reporting client. Test two mod clients in the
+same run: compatible timings corroborate the report; conflicting timings are flagged
+for review without automatically removing either record. Backend comparison permits
+one second/twenty ticks of spread and ten seconds of run-start clock disagreement.
+Run timestamps and rosters remain client-reported evidence, not trusted game attestations.
+
+Existing synced PBs remain eligible unless moderated. Stored local minima are no
+longer uploaded; the previous bulk upload route rejects new submissions. Test token
+expiry/renewal, logout during tracking, account switching and bounded queue overflow.
+Do not enable production evidence collection before the coordinated moderation and
+erasure features are available.

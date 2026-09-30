@@ -10,20 +10,21 @@ class LinkFlow(private val post: (String, JsonObject) -> String) {
         OwnershipProof.serialized {
             require(uuid.matches(Regex("[0-9a-f]{32}")))
             require(name.matches(Regex("[A-Za-z0-9_]{1,16}")))
+            val nonce = OwnershipProof.nonce()
             val challenge =
                 parse(
                     post(
                         "challenge",
                         JsonObject().apply {
                             addProperty("version", 1)
+                            addProperty("client_nonce", nonce)
                             addProperty("uuid", uuid)
                             addProperty("name", name)
                         },
                     )
                 )
             val id = token(challenge, "challenge_id")
-            val serverId = challenge.get("server_id")?.asString ?: error("Missing challenge")
-            require(serverId.matches(Regex("[0-9a-f]{39}")))
+            val serverId = OwnershipProof.serverId(challenge, nonce, uuid, "link")
             check(!Thread.currentThread().isInterrupted)
             proveOwnership(serverId)
             check(!Thread.currentThread().isInterrupted)

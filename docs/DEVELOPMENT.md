@@ -54,6 +54,10 @@ Browser linking proves ownership through Mojang and opens an HTTPS confirmation
 page. Only Mojang receives the Minecraft access token. A status-only receipt is
 saved per account in instance-local `config/mithrilpf/link.json`; it cannot log
 into the website or upload records by itself.
+Linking, record syncing and party authorization each bind fresh client and server
+nonces to the account and purpose. The mod computes the proof hash locally and
+rejects substituted hashes before contacting Mojang. The backend must support
+this nonce exchange; there is no fallback to server-chosen proof hashes.
 The linking screen defaults to Open browser. "Use another browser or phone" reveals
 Copy link, a locally generated QR and a short code for `mithril.foo/link` when the
 backend supports it. Refresh link appears on expiry/failure, not alongside a valid

@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.soloclear
 
+import com.google.gson.JsonObject
 import kotlin.math.floor
 
 /**
@@ -89,6 +90,23 @@ class DungeonScore {
             bonus +
             speed(elapsedSeconds)
     }
+
+    /** Captured on the client thread, then serialized before leaving it. */
+    fun evidence(inBoss: Boolean): JsonObject =
+        JsonObject().apply {
+            addProperty("completed", completed)
+            addProperty("cleared", cleared)
+            addProperty("secrets", secrets)
+            addProperty("crypts", crypts)
+            addProperty("puzzles", puzzles)
+            addProperty("solved", solved)
+            addProperty("deaths", deaths)
+            addProperty("blood_included", bloodIncluded)
+            addProperty("in_boss", inBoss)
+            addProperty("mimic", mimic)
+            addProperty("prince", prince)
+            addProperty("bat", bat)
+        }
 
     private fun integer(pattern: Regex, text: String) =
         pattern.matchEntire(text)?.groupValues?.get(1)?.toIntOrNull()
