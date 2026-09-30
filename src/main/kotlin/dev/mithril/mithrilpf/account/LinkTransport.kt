@@ -60,6 +60,11 @@ object LinkTransport {
     }
 
     fun finderRequest(path: String, body: JsonObject?, token: String?): String {
+        validateFinderPath(path, token)
+        return request(path, body, token, 1048576, if (path == "party/client/state") 35 else 12)
+    }
+
+    internal fun validateFinderPath(path: String, token: String?) {
         val proof = path in setOf("auth/device-challenge", "auth/device-verify")
         val allowed =
             path in
@@ -86,7 +91,6 @@ object LinkTransport {
         require(proof || allowed)
         require(proof == (token == null))
         if (token != null) require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
-        return request(path, body, token, 1048576, if (path == "party/client/state") 35 else 12)
     }
 
     private fun request(

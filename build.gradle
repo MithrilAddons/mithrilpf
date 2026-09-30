@@ -89,6 +89,8 @@ sonar {
         property 'sonar.sources', 'src/main,src/updater,tools,.github,build.gradle,settings.gradle,gradle/verification-metadata.xml'
         property 'sonar.tests', 'src/test,tools/tests'
         property 'sonar.exclusions', 'src/main/resources/assets/mithrilpf/icon.png,tools/tests/**'
+        // Minecraft widgets are verified in-game; headless state and input logic stay measured.
+        property 'sonar.coverage.exclusions', 'src/main/kotlin/dev/mithril/mithrilpf/ui/FinderAvatar.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderBrowse.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderEditor.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderListingPreview.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderPartyRow.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderPartyView.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderReportScreen.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderSprites.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderNotifications.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/PartyFinderScreen.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderControls.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderHud.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderTabButton.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/SettingToggle.kt'
         property 'sonar.java.binaries', files(sourceSets.main.output.classesDirs, sourceSets.updater.output.classesDirs)
         property 'sonar.coverage.jacoco.xmlReportPaths', 'build/reports/jacoco/test/jacocoTestReport.xml'
         property 'sonar.python.version', '3.14'

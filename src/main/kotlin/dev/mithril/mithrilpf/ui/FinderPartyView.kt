@@ -3,7 +3,9 @@ package dev.mithril.mithrilpf.ui
 import com.google.gson.JsonObject
 import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.finder.FinderClient
+import dev.mithril.mithrilpf.finder.FinderMember
 import dev.mithril.mithrilpf.finder.FinderMessage
+import dev.mithril.mithrilpf.finder.FinderParty
 import java.util.UUID
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.AbstractScrollArea
@@ -67,6 +69,41 @@ class FinderPartyView(
             width,
             Palette.ACCENT,
         )
+        rosterMembers(roster, width, party)
+        handoff(roster, width, party)
+        leaderControls(roster, width, party)
+        chat(root, width, party)
+        return root
+    }
+
+    fun refreshMessages(): Boolean {
+        sendButton?.active = !finder.busy && navigation.chatDraft.isNotBlank()
+        val messages = finder.state?.party?.messages.orEmpty()
+        if (previousMessages == messages) return false
+        previousMessages = messages
+        var atBottom = true
+        chatScroll?.visitWidgets {
+            if (it is AbstractScrollArea) atBottom = it.scrollAmount() >= it.maxScrollAmount() - 2
+        }
+        chatText?.message = messages(messages)
+        chatScroll?.arrangeElements()
+        if (atBottom)
+            chatScroll?.visitWidgets {
+                if (it is AbstractScrollArea) it.setScrollAmount(it.maxScrollAmount().toDouble())
+            }
+        return true
+    }
+
+    private fun messages(values: List<FinderMessage>): Component =
+        if (values.isEmpty()) finderText("party.no_messages")
+        else
+            Component.literal(
+                values.joinToString("\n\n") {
+                    (it.name?.let { name -> "$name: " } ?: "") + it.text
+                }
+            )
+
+    private fun rosterMembers(roster: LinearLayout, width: Int, party: FinderParty) {
         for ((index, slot) in party.slots.withIndex()) {
             val member = party.members.firstOrNull { it.slot == index }
             val role = finderText("role.${slot.role.key}")
@@ -87,31 +124,13 @@ class FinderPartyView(
                     finderText("party.member_row", role, member.name, presence),
                     width - 17,
                 )
-                if (party.youLead && member.uuid != finder.state?.uuid) {
-                    val controls = roster.addChild(LinearLayout.horizontal().spacing(4))
-                    for (block in listOf(false, true)) controls.button(
-                        finderText(if (block) "party.remove_block" else "party.remove"),
-                        (width - 4) / 2,
-                        enabled = !finder.busy,
-                    ) {
-                        confirm(
-                            finderText(
-                                if (block) "party.confirm_block" else "party.confirm_remove",
-                                member.name,
-                            )
-                        ) {
-                            finder.action(
-                                "remove",
-                                JsonObject().apply {
-                                    addProperty("member", member.uuid)
-                                    addProperty("block", block)
-                                },
-                            )
-                        }
-                    }
-                }
+                if (party.youLead && member.uuid != finder.state?.uuid)
+                    memberControls(roster, width, member)
             }
         }
+    }
+
+    private fun handoff(roster: LinearLayout, width: Int, party: FinderParty) {
         if (party.slots.all { it.filled } && !party.completed) {
             roster.label(
                 finderText(if (party.youLead) "party.handoff_leader" else "party.handoff_member"),
@@ -133,6 +152,9 @@ class FinderPartyView(
                     MithrilPF.retryPartyInvites()
                 }
         }
+    }
+
+    private fun leaderControls(roster: LinearLayout, width: Int, party: FinderParty) {
         if (party.youLead && !party.completed) {
             roster.button(finderText("party.edit"), width, enabled = !finder.busy, action = edit)
             roster.button(
@@ -151,6 +173,9 @@ class FinderPartyView(
         roster.button(finderText("party.leave"), width, enabled = !finder.busy) {
             confirm(finderText("party.confirm_leave")) { finder.action("leave", JsonObject()) }
         }
+    }
+
+    private fun chat(root: LinearLayout, width: Int, party: FinderParty) {
         val chat = root.addChild(LinearLayout.vertical().spacing(8))
         val heading = chat.addChild(LinearLayout.horizontal().spacing(5))
         heading.label(finderText("party.chat"), width - 110)
@@ -247,33 +272,30 @@ class FinderPartyView(
                 enabled = !finder.busy && navigation.chatDraft.isNotBlank(),
                 action = send,
             )
-        return root
     }
 
-    fun refreshMessages(): Boolean {
-        sendButton?.active = !finder.busy && navigation.chatDraft.isNotBlank()
-        val messages = finder.state?.party?.messages.orEmpty()
-        if (previousMessages == messages) return false
-        previousMessages = messages
-        var atBottom = true
-        chatScroll?.visitWidgets {
-            if (it is AbstractScrollArea) atBottom = it.scrollAmount() >= it.maxScrollAmount() - 2
-        }
-        chatText?.message = messages(messages)
-        chatScroll?.arrangeElements()
-        if (atBottom)
-            chatScroll?.visitWidgets {
-                if (it is AbstractScrollArea) it.setScrollAmount(it.maxScrollAmount().toDouble())
+    private fun memberControls(roster: LinearLayout, width: Int, member: FinderMember) {
+
+        val controls = roster.addChild(LinearLayout.horizontal().spacing(4))
+        for (block in listOf(false, true)) controls.button(
+            finderText(if (block) "party.remove_block" else "party.remove"),
+            (width - 4) / 2,
+            enabled = !finder.busy,
+        ) {
+            confirm(
+                finderText(
+                    if (block) "party.confirm_block" else "party.confirm_remove",
+                    member.name,
+                )
+            ) {
+                finder.action(
+                    "remove",
+                    JsonObject().apply {
+                        addProperty("member", member.uuid)
+                        addProperty("block", block)
+                    },
+                )
             }
-        return true
+        }
     }
-
-    private fun messages(values: List<FinderMessage>): Component =
-        if (values.isEmpty()) finderText("party.no_messages")
-        else
-            Component.literal(
-                values.joinToString("\n\n") {
-                    (it.name?.let { name -> "$name: " } ?: "") + it.text
-                }
-            )
 }

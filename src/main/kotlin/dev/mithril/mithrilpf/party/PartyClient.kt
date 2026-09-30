@@ -4,65 +4,68 @@ import dev.mithril.mithrilpf.account.DeviceSessionStore
 import dev.mithril.mithrilpf.account.LinkReceiptStore
 import dev.mithril.mithrilpf.account.LinkTransport
 import dev.mithril.mithrilpf.account.ServiceFailure
-import dev.mithril.mithrilpf.ui.Palette
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Future
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
-import net.minecraft.network.chat.ClickEvent
-import net.minecraft.network.chat.Component
 
 /**
  * Client owns gameplay/scheduling. One bounded worker owns disk, HTTP and the scoped credential.
  */
-class PartyClient(private val client: Minecraft) : AutoCloseable {
+internal interface PartyHost {
+    val uuid: String
+    val name: String
+    val connection: Any?
+    val hasPlayer: Boolean
+    val server: String?
+
+    fun proof(): (String) -> Unit
+
+    fun execute(action: () -> Unit)
+
+    fun command(command: String)
+
+    fun message(key: String)
+
+    fun chatMessage(message: PartyChatMessage)
+
+    fun chatStatus(key: String, retryText: String?)
+}
+
+class PartyClient
+internal constructor(
+    private val host: PartyHost,
+    private val store: LinkReceiptStore,
+    private val devices: DeviceSessionStore,
+    private val flow: PartyFlow,
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
+) : AutoCloseable {
+    constructor(
+        client: Minecraft
+    ) : this(
+        MinecraftPartyHost(client),
+        LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json")),
+        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json")),
+        PartyFlow(LinkTransport::partyPost),
+    )
+
     private val worker =
         ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, ArrayBlockingQueue(1)) { task ->
             Thread(task, "MithrilPF parties").apply { isDaemon = true }
         }
-    private val store =
-        LinkReceiptStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/link.json"))
-    private val devices =
-        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json"))
-    private val flow = PartyFlow(LinkTransport::partyPost)
     private var renewChatAuth = false
     private val relay =
         PartyChatRelay(
             LinkTransport::chatPost,
             { task ->
-                client.execute {
-                    if (client.user.profileId.toString().replace("-", "") == account) task()
+                host.execute {
+                    if (host.uuid == account) task()
                 }
             },
-            { message ->
-                client.player?.sendSystemMessage(
-                    Component.translatable("chat.mithrilpf.prefix")
-                        .withStyle { it.withColor(Palette.ACCENT and 0xFFFFFF) }
-                        .append(
-                            Component.literal("${message.name}: ").withStyle {
-                                it.withColor(Palette.HIGHLIGHT and 0xFFFFFF)
-                            }
-                        )
-                        .append(
-                            Component.literal(message.text).withStyle {
-                                it.withColor(Palette.TEXT and 0xFFFFFF)
-                            }
-                        )
-                )
-            },
-            { key, retryText ->
-                val message =
-                    Component.translatable("chat.mithrilpf.$key").withStyle {
-                        it.withColor(Palette.ACCENT and 0xFFFFFF)
-                    }
-                if (retryText != null)
-                    message.withStyle {
-                        it.withClickEvent(ClickEvent.SuggestCommand("/mpc $retryText"))
-                    }
-                client.player?.sendSystemMessage(message)
-            },
+            host::chatMessage,
+            host::chatStatus,
             {
                 renewChatAuth = true
                 nextPoll = 0
@@ -92,15 +95,13 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     var status = "waiting"
         private set
 
-    private fun now() = System.nanoTime() / 1_000_000
+    private fun now() = clock()
 
     private fun online(): Boolean {
-        val host =
-            client.currentServer?.ip?.substringBefore(':')?.lowercase()?.trimEnd('.')
-                ?: return false
-        return client.player != null &&
-            client.connection != null &&
-            (host == "hypixel.net" || host.endsWith(".hypixel.net"))
+        val server = host.server?.substringBefore(':')?.lowercase()?.trimEnd('.') ?: return false
+        return host.hasPlayer &&
+            host.connection != null &&
+            (server == "hypixel.net" || server.endsWith(".hypixel.net"))
     }
 
     fun reinvite() {
@@ -115,7 +116,7 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
 
     fun chat(text: String) {
         if (!online()) return
-        val roster = parser.receive(text, client.user.name, now()) ?: return
+        val roster = parser.receive(text, host.name, now()) ?: return
         val current = party ?: return
         if (!current.youLead) return
         if (!current.accepts(roster)) {
@@ -134,38 +135,97 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
     fun sendChat(text: String) = relay.send(text)
 
     fun tick(deviceToken: String? = null, deviceSigningOut: Boolean = false) {
-        val user = client.user
-        val uuid = user.profileId.toString().replace("-", "")
-        val activeConnection = client.connection
+        val uuid = host.uuid
+        val name = host.name
+        val activeConnection = host.connection
         if (
             uuid != account ||
                 connection !== activeConnection ||
                 nativeToken != deviceToken ||
                 signingOut != deviceSigningOut
         ) {
-            relay.update(null)
-            relay.tick(false)
-            generation++
-            pending?.cancel(true)
+            resetConnection()
             account = uuid
             connection = activeConnection
             nativeToken = deviceToken
             signingOut = deviceSigningOut
-            busy = false
-            failures = 0
-            party = null
-            activity = null
-            report = null
-            retry = false
-            invites.clear()
-            parser.reset()
-            nextPoll = 0
-            nextRoster = 0
         }
         if (signingOut) return
         val time = now()
-        relay.tick(client.player != null && activeConnection != null)
+        relay.tick(host.hasPlayer && activeConnection != null)
         val inGame = online()
+        tickCommands(inGame, time)
+        if (busy || time < nextPoll) return
+        val attempt = generation
+        val outgoing = report
+        val renew = renewChatAuth
+        renewChatAuth = false
+        report = null // Never replay an uncertain invite request automatically.
+        val prove = host.proof()
+        busy = true
+        nextPoll = time + 30_000
+        worker.purge()
+        pending = worker.submit {
+            val (result, received, receivedChat) =
+                exchange(uuid, name, inGame, outgoing, renew, prove)
+            host.execute {
+                if (generation == attempt) {
+                    acceptReply(result, received, receivedChat, outgoing)
+                }
+            }
+        }
+    }
+
+    private data class Exchange(val status: String, val reply: PartyReply?, val chat: ChatAccess?)
+
+    private fun exchange(
+        uuid: String,
+        name: String,
+        inGame: Boolean,
+        outgoing: PartyReport?,
+        renew: Boolean,
+        prove: (String) -> Unit,
+    ): Exchange {
+        var reply: PartyReply? = null
+        var chatAccess: ChatAccess? = null
+        val result =
+            try {
+                if (renew) flow.clear()
+                val receipt = devices.load(uuid)?.receipt ?: store.load(uuid)?.token
+                if (receipt == null) {
+                    flow.clear()
+                    "unlinked"
+                } else {
+                    reply = flow.exchange(uuid, name, receipt, inGame, outgoing, prove)
+                    chatAccess = flow.chatAccess()
+                    "connected"
+                }
+            } catch (failure: Exception) {
+                // Do not log tokens, receipts, access tokens, or HTTP exception details.
+                if (failure is ServiceFailure && failure.statusCode == 401) "unlinked"
+                else "unavailable"
+            }
+        return Exchange(result, reply, chatAccess)
+    }
+
+    private fun resetConnection() {
+        relay.update(null)
+        relay.tick(false)
+        generation++
+        pending?.cancel(true)
+        busy = false
+        failures = 0
+        party = null
+        activity = null
+        report = null
+        retry = false
+        invites.clear()
+        parser.reset()
+        nextPoll = 0
+        nextRoster = 0
+    }
+
+    private fun tickCommands(inGame: Boolean, time: Long) {
         val current = party
         if (!inGame) {
             invites.clear()
@@ -175,7 +235,8 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
         }
         if (inGame && time >= nextCommand && invites.isNotEmpty()) {
             if (current?.youLead == true && current.invited) {
-                client.connection?.sendCommand("party invite ${invites.removeFirst()}")
+                host.command("p ${invites.joinToString(" ")}")
+                invites.clear()
                 nextCommand = time + 1_000
             } else invites.clear()
         }
@@ -189,87 +250,58 @@ class PartyClient(private val client: Minecraft) : AutoCloseable {
                 (current.ready || current.invited)
         ) {
             parser.request(time)
-            client.connection?.sendCommand("party list")
+            host.command("party list")
             nextRoster = time + 10_000
             nextCommand = time + 1_000
         }
-        if (busy || time < nextPoll) return
-        val attempt = generation
-        val outgoing = report
-        val renew = renewChatAuth
-        renewChatAuth = false
-        report = null // Never replay an uncertain invite request automatically.
-        val service = client.services().sessionService()
-        busy = true
-        nextPoll = time + 30_000
-        worker.purge()
-        pending = worker.submit {
-            var reply: PartyReply? = null
-            var chatAccess: ChatAccess? = null
-            val result =
-                try {
-                    if (renew) flow.clear()
-                    val receipt = devices.load(uuid)?.receipt ?: store.load(uuid)?.token
-                    if (receipt == null) {
-                        flow.clear()
-                        "unlinked"
-                    } else {
-                        reply =
-                            flow.exchange(uuid, user.name, receipt, inGame, outgoing) { serverId ->
-                                service.joinServer(user.profileId, user.accessToken, serverId)
-                            }
-                        chatAccess = flow.chatAccess()
-                        "connected"
-                    }
-                } catch (failure: Exception) {
-                    // Do not log tokens, receipts, access tokens, or HTTP exception details.
-                    if (failure is ServiceFailure && failure.statusCode == 401) "unlinked"
-                    else "unavailable"
-                }
-            val received = reply
-            val receivedChat = chatAccess
-            client.execute {
-                if (generation == attempt) {
-                    busy = false
-                    status = result
-                    if (result != "unavailable" && !renewChatAuth) relay.update(receivedChat)
-                    val previous = party
-                    party = received?.party
-                    activity = received?.activity
-                    if (party != null && previous?.id != party?.id) message("reserved")
-                    if (previous?.generation != party?.generation) {
-                        invites.clear()
-                        parser.reset()
-                        nextRoster = 0
-                    }
-                    if (
-                        party?.full == true &&
-                            (previous?.full != true || previous.generation != party?.generation)
-                    )
-                        message("full")
-                    if (received?.invites?.isNotEmpty() == true && online()) {
-                        invites.addAll(received.invites)
-                        message("inviting")
-                    }
-                    if (
-                        outgoing?.roster?.names?.size == 5 &&
-                            received != null &&
-                            previous != null &&
-                            party == null
-                    )
-                        message("complete")
-                    failures = if (result == "unavailable") (failures + 1).coerceAtMost(4) else 0
-                    val delay =
-                        if (failures > 0) minOf(300, 30 shl failures) else received?.interval ?: 30
-                    nextPoll = if (report != null || renewChatAuth) 0 else now() + delay * 1_000L
-                }
-            }
+    }
+
+    private fun acceptReply(
+        result: String,
+        received: PartyReply?,
+        receivedChat: ChatAccess?,
+        outgoing: PartyReport?,
+    ) {
+        busy = false
+        status = result
+        if (result != "unavailable" && !renewChatAuth) relay.update(receivedChat)
+        updateParty(received, outgoing)
+        failures = if (result == "unavailable") (failures + 1).coerceAtMost(4) else 0
+        val delay = if (failures > 0) minOf(300, 30 shl failures) else received?.interval ?: 30
+        nextPoll = if (report != null || renewChatAuth) 0 else now() + delay * 1_000L
+    }
+
+    private fun updateParty(received: PartyReply?, outgoing: PartyReport?) {
+        val previous = party
+        party = received?.party
+        activity = received?.activity
+        if (party != null && previous?.id != party?.id) message("reserved")
+        if (previous?.generation != party?.generation) {
+            invites.clear()
+            parser.reset()
+            nextRoster = 0
         }
+        if (
+            party?.full == true &&
+                (previous?.full != true || previous.generation != party?.generation)
+        )
+            message("full")
+        if (received?.invites?.isNotEmpty() == true && online()) {
+            invites.addAll(received.invites)
+            message("inviting")
+        }
+        if (
+            outgoing?.roster?.names?.size == 5 &&
+                received != null &&
+                previous != null &&
+                party == null
+        )
+            message("complete")
     }
 
     private fun message(key: String) {
         if (nativeToken != null && key in setOf("reserved", "full", "complete")) return
-        client.player?.sendSystemMessage(Component.translatable("party.mithrilpf.$key"))
+        host.message(key)
     }
 
     override fun close() {

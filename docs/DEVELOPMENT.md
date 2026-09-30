@@ -193,8 +193,8 @@ Signing out revokes credentials derived from that session without deleting saved
 records. Sync is bounded, retries outages and separates accounts. SS tracking is not implemented.
 
 Party handoff uses a separate 30-day presence credential; it cannot upload records
-or log into the browser. All five must be online before one automatic invite round.
-`/mithrilpfreinvite` explicitly retries missing players. Complete English
+or log into the browser. All five must be online before one automatic `/p name1 name2 name3 name4` command from the leader.
+`/mithrilpfreinvite` explicitly retries missing players together in one `/p` command. Complete English
 `/party list` replies confirm membership. Conflicting game parties stop invites;
 the mod never kicks, disbands or leaves automatically. The canonical protocol
 lives in the web repository's

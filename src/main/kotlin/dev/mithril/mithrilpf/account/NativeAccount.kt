@@ -8,14 +8,36 @@ import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 
 /** Client-thread state; one bounded worker performs credential I/O and ownership verification. */
-class NativeAccount(private val client: Minecraft) : AutoCloseable {
+internal class DeviceIdentity(val name: String, val prove: (String) -> Unit)
+
+class NativeAccount
+internal constructor(
+    private val store: DeviceSessionStore,
+    private val flow: DeviceFlow,
+    private val uuid: () -> String,
+    private val signInIdentity: () -> DeviceIdentity,
+    private val execute: (() -> Unit) -> Unit,
+) : AutoCloseable {
+    constructor(
+        client: Minecraft
+    ) : this(
+        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json")),
+        DeviceFlow(LinkTransport::finderRequest),
+        { client.user.profileId.toString().replace("-", "") },
+        {
+            val user = client.user
+            val service = client.services().sessionService()
+            DeviceIdentity(user.name) { serverId ->
+                service.joinServer(user.profileId, user.accessToken, serverId)
+            }
+        },
+        { action -> client.execute(action) },
+    )
+
     private val worker =
         ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, ArrayBlockingQueue(1)) { task ->
             Thread(task, "MithrilPF native account").apply { isDaemon = true }
         }
-    private val store =
-        DeviceSessionStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/device.json"))
-    private val flow = DeviceFlow(LinkTransport::finderRequest)
     private var pending: Future<*>? = null
     private var account = ""
     private var generation = 0
@@ -32,7 +54,7 @@ class NativeAccount(private val client: Minecraft) : AutoCloseable {
         private set
 
     fun tick() {
-        val uuid = client.user.profileId.toString().replace("-", "")
+        val uuid = uuid()
         if (uuid == account) return
         pending?.cancel(true)
         generation++
@@ -70,14 +92,10 @@ class NativeAccount(private val client: Minecraft) : AutoCloseable {
 
     fun signIn() {
         if (busy || !writable || session != null) return
-        val user = client.user
+        val user = signInIdentity()
         val uuid = account
-        val service = client.services().sessionService()
         submit("signing_in") {
-            val created =
-                flow.signIn(uuid, user.name) { serverId ->
-                    service.joinServer(user.profileId, user.accessToken, serverId)
-                }
+            val created = flow.signIn(uuid, user.name, user.prove)
             try {
                 store.save(uuid, created)
             } catch (error: Exception) {
@@ -121,7 +139,7 @@ class NativeAccount(private val client: Minecraft) : AutoCloseable {
                     // HTTP/proof exceptions can contain credentials: never log their details.
                     { status = "failed" }
                 }
-            client.execute {
+            execute {
                 if (generation == attempt) {
                     publish()
                     busy = false

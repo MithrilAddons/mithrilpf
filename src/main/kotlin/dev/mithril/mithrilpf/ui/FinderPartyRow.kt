@@ -110,8 +110,12 @@ class FinderPartyRow(
             FinderSprites.role(
                 g,
                 slot.role,
-                if (slot.filled) 0
-                else if (slot.role in blocked) 4 else if (slot.role in eligible) 2 else 1,
+                when {
+                    slot.filled -> 0
+                    slot.role in blocked -> 4
+                    slot.role in eligible -> 2
+                    else -> 1
+                },
                 sx,
                 y + 4,
             )

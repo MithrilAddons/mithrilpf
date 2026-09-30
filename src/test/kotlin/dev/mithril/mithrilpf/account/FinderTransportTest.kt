@@ -37,4 +37,47 @@ class FinderTransportTest {
         assertNull(LinkTransport.failureReason("""{"detail":"arbitrary untrusted text"}"""))
         assertNull(LinkTransport.failureReason("broken"))
     }
+
+    @Test
+    fun nativeRoutesRejectCredentialMixupsAndUnapprovedDestinations() {
+        val token = "t".repeat(43)
+        for (path in listOf("auth/device-challenge", "auth/device-verify")) {
+            LinkTransport.validateFinderPath(path, null)
+            assertFails { LinkTransport.validateFinderPath(path, token) }
+        }
+        val authenticated =
+            listOf(
+                "auth/device-session",
+                "auth/device-logout",
+                "auth/device-player-card",
+                "auth/device-erase",
+                "party/client/state",
+                "party/client/look",
+                "party/client/stop-looking",
+                "party/client/reserve",
+                "party/client/leave",
+                "party/client/publish",
+                "party/client/edit",
+                "party/client/pause",
+                "party/client/unlist",
+                "party/client/remove",
+                "party/client/chat",
+                "party/client/chat/report",
+                "party/client/listings?floor=F7",
+                "party/client/listings?floor=M7",
+                "party/client/listings/party0000001",
+            )
+        for (path in authenticated) {
+            LinkTransport.validateFinderPath(path, token)
+            assertFails { LinkTransport.validateFinderPath(path, null) }
+            assertFails { LinkTransport.validateFinderPath(path, "bad\r\nAuthorization: evil") }
+        }
+        for (path in
+            listOf(
+                "https://evil.invalid/",
+                "../auth/device-session",
+                "party/client/listings?floor=F6",
+                "party/client/listings/party0000001?extra=1",
+            )) assertFails { LinkTransport.validateFinderPath(path, token) }
+    }
 }

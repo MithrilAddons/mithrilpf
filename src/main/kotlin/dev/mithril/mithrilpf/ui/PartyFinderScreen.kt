@@ -550,15 +550,23 @@ class PartyFinderScreen(
                 (membershipChanged || focusedLeaf() !is EditBox) &&
                 viewStamp != currentStamp()
         ) {
-            var amount = 0.0
-            scroll.visitWidgets { if (it is AbstractScrollArea) amount = it.scrollAmount() }
-            rebuildWidgets()
-            scroll.visitWidgets { if (it is AbstractScrollArea) it.setScrollAmount(amount) }
+            rebuildPreservingScroll()
             return
         }
+        refreshBindings()
+    }
+
+    private fun refreshBindings() {
         var changed = false
         for (binding in bindings) if (binding()) changed = true
         if (changed) scroll.arrangeElements()
+    }
+
+    private fun rebuildPreservingScroll() {
+        var amount = 0.0
+        scroll.visitWidgets { if (it is AbstractScrollArea) amount = it.scrollAmount() }
+        rebuildWidgets()
+        scroll.visitWidgets { if (it is AbstractScrollArea) it.setScrollAmount(amount) }
     }
 
     override fun extractRenderState(

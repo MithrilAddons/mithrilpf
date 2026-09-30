@@ -46,5 +46,7 @@ class FinderAvatarWidget(uuid: String) : AbstractWidget(0, 0, 12, 12, Component.
         avatar.draw(g, x, y)
     }
 
-    override fun updateWidgetNarration(output: NarrationElementOutput) {}
+    override fun updateWidgetNarration(output: NarrationElementOutput) {
+        // Decorative preview; interactive controls provide their own narration.
+    }
 }

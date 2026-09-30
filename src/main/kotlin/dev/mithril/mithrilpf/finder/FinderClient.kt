@@ -4,28 +4,64 @@ import com.google.gson.JsonObject
 import dev.mithril.mithrilpf.account.LinkTransport
 import dev.mithril.mithrilpf.account.NativeAccount
 import dev.mithril.mithrilpf.account.ServiceFailure
-import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
-import dev.mithril.mithrilpf.ui.Palette
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Future
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
-import net.minecraft.client.resources.sounds.SimpleSoundInstance
-import net.minecraft.network.chat.ClickEvent
-import net.minecraft.network.chat.Component
-import net.minecraft.sounds.SoundEvents
 
 /** Separate bounded lanes keep a held state request from delaying a user's actions. */
-class FinderClient(private val client: Minecraft, private val account: NativeAccount) :
-    AutoCloseable {
+interface FinderHost {
+    val uuid: String
+    val token: String?
+    val accountBusy: Boolean
+    val inGame: Boolean
+
+    fun execute(action: () -> Unit)
+
+    fun reloadAccount()
+
+    fun notify(notices: List<FinderNotice>)
+}
+
+class FinderClient
+internal constructor(
+    private val host: FinderHost,
+    private val presetStore: FinderPresetStore,
+    private val request: (String, JsonObject?, String?) -> String = LinkTransport::finderRequest,
+) : AutoCloseable {
+    constructor(
+        client: Minecraft,
+        account: NativeAccount,
+    ) : this(
+        object : FinderHost {
+            override val uuid
+                get() = client.user.profileId.toString().replace("-", "")
+
+            override val token
+                get() = account.session?.token
+
+            override val accountBusy
+                get() = account.busy
+
+            override val inGame
+                get() = client.player != null
+
+            override fun execute(action: () -> Unit) = client.execute(action)
+
+            override fun reloadAccount() = account.load()
+
+            override fun notify(notices: List<FinderNotice>) =
+                dev.mithril.mithrilpf.ui.finderNotices(client, notices)
+        },
+        FinderPresetStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/finder.json")),
+    )
+
     private val states = lane("state")
     private val reads = lane("listings")
     private val writes = lane("actions")
     private val notices = FinderNotices()
-    private val presetStore =
-        FinderPresetStore(FabricLoader.getInstance().configDir.resolve("mithrilpf/finder.json"))
     var presets: Map<String, FinderPreset> = emptyMap()
         private set
 
@@ -79,52 +115,24 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
         }
 
     fun tick(visible: Boolean) {
-        val uuid = client.user.profileId.toString().replace("-", "")
-        val session = account.session
-        if (identity != uuid || token != session?.token) {
+        val uuid = host.uuid
+        val sessionToken = host.token
+        if (identity != uuid || token != sessionToken) {
             reset()
             identity = uuid
-            token = session?.token
+            token = sessionToken
         }
         val credential = token ?: return
-        state?.let { current ->
-            for (notice in notices.accept(current.notices)) {
-                if (
-                    notice.kind !in
-                        setOf(
-                            "placed",
-                            "reserved",
-                            "party_full",
-                            "party_closed",
-                            "left_party",
-                            "leader_now",
-                            "party_joined",
-                            "stopped_looking",
-                        )
-                )
-                    continue
-                client.player?.sendSystemMessage(
-                    Component.translatable("finder.mithrilpf.notice.${notice.kind}").withStyle {
-                        it.withColor(Palette.ACCENT and 0xFFFFFF)
-                            .withClickEvent(ClickEvent.RunCommand("/mpf"))
-                    }
-                )
-                if (
-                    client.player != null &&
-                        DungeonTimers.settings.finderSound &&
-                        notice.kind in setOf("placed", "party_full")
-                )
-                    client.soundManager.play(
-                        SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING, 1.0f)
-                    )
-            }
-        }
-        val active =
-            visible || client.player != null || state?.looking != null || state?.party != null
-        if (!active || account.busy) return
+        deliverNotices()
+        val active = visible || host.inGame || state?.looking != null || state?.party != null
+        if (!active || host.accountBusy) return
         val now = System.nanoTime()
         if (!stateBusy && !busy && now >= nextState) poll(credential)
         if (visible && !readBusy && !busy && now >= nextRead) read(credential)
+    }
+
+    private fun deliverNotices() {
+        state?.let { host.notify(notices.accept(it.notices)) }
     }
 
     fun changeFloor(value: String) {
@@ -166,7 +174,7 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
         done: (Boolean) -> Unit = {},
     ) {
         val credential = token ?: return
-        if (busy || account.busy) return
+        if (busy || host.accountBusy) return
         val attempt = generation
         val uuid = identity
         busy = true
@@ -178,8 +186,7 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
         val requestedFloor = body.get("floor")?.asString ?: state?.party?.floor ?: floor
         writeTask = writes.submit {
             val result = runCatching {
-                val response =
-                    LinkTransport.finderRequest("party/client/$path", request, credential)
+                val response = request("party/client/$path", request, credential)
                 if (path == "chat/report") {
                     FinderProtocol.parse(response)
                     null
@@ -189,26 +196,30 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
                 if (result.isSuccess && remember != null) {
                     runCatching { presetStore.save(uuid, requestedFloor, remember) }.isSuccess
                 } else null
-            client.execute {
-                if (attempt == generation) {
-                    busy = false
-                    if (saved != null) {
-                        presetError = !saved
-                        if (saved) presets = presets + (requestedFloor to requireNotNull(remember))
-                    }
-                    result
-                        .onSuccess { value ->
-                            if (value != null) state = value
-                            offline = false
-                        }
-                        .onFailure(::failed)
-                    nextState = 0
-                    nextRead = 0
-                    revision++
-                    done(result.isSuccess)
-                }
+            host.execute {
+                if (attempt == generation)
+                    finishAction(result, saved, requestedFloor, remember, done)
             }
         }
+    }
+
+    private fun finishAction(
+        result: Result<FinderState?>,
+        saved: Boolean?,
+        requestedFloor: String,
+        remember: FinderPreset?,
+        done: (Boolean) -> Unit,
+    ) {
+        busy = false
+        if (saved != null) {
+            presetError = !saved
+            if (saved) presets = presets + (requestedFloor to requireNotNull(remember))
+        }
+        acceptState(result)
+        nextState = 0
+        nextRead = 0
+        revision++
+        done(result.isSuccess)
     }
 
     private fun poll(credential: String) {
@@ -229,28 +240,31 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
         stateTask = states.submit {
             val result = runCatching {
                 FinderProtocol.state(
-                    LinkTransport.finderRequest("party/client/state", body, credential),
+                    request("party/client/state", body, credential),
                     uuid,
                 )
             }
-            client.execute {
-                if (attempt == generation) {
-                    stateBusy = false
-                    if (change == mutation && !busy) {
-                        result
-                            .onSuccess { value ->
-                                if (value != null) state = value
-                                offline = false
-                            }
-                            .onFailure(::failed)
-                        nextState =
-                            System.nanoTime() +
-                                TimeUnit.SECONDS.toNanos(if (result.isSuccess) 1 else 10)
-                        revision++
-                    }
-                }
+            host.execute {
+                if (attempt == generation) finishPoll(change, result)
             }
         }
+    }
+
+    private fun acceptState(result: Result<FinderState?>) {
+        result
+            .onSuccess { value ->
+                if (value != null) state = value
+                offline = false
+            }
+            .onFailure(::failed)
+    }
+
+    private fun finishPoll(change: Int, result: Result<FinderState?>) {
+        stateBusy = false
+        if (change != mutation || busy) return
+        acceptState(result)
+        nextState = System.nanoTime() + TimeUnit.SECONDS.toNanos(if (result.isSuccess) 1 else 10)
+        revision++
     }
 
     private fun read(credential: String) {
@@ -263,63 +277,74 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
         readBusy = true
         reads.purge()
         readTask = reads.submit {
-            if (loadPresets) {
-                val saved = runCatching { presetStore.load(uuid) }
-                client.execute {
-                    if (attempt == generation) {
-                        presetsLoaded = true
-                        presetError = saved.isFailure
-                        presets = saved.getOrDefault(emptyMap())
-                    }
-                }
-            }
+            if (loadPresets) loadPresets(uuid, attempt)
             val result = runCatching {
                 val rows =
                     FinderProtocol.listings(
-                        LinkTransport.finderRequest(
+                        request(
                             "party/client/listings?floor=$requestedFloor",
                             null,
                             credential,
                         ),
                         requestedFloor,
                     )
-                val details =
-                    if (requestedParty != null && rows.any { it.id == requestedParty }) {
-                        try {
-                            FinderProtocol.detail(
-                                LinkTransport.finderRequest(
-                                    "party/client/listings/$requestedParty",
-                                    null,
-                                    credential,
-                                ),
-                                requestedParty,
-                            )
-                        } catch (failure: ServiceFailure) {
-                            if (failure.statusCode == 404) null else throw failure
-                        }
-                    } else null
+                val details = readDetail(rows, requestedParty, credential)
                 rows to details
             }
-            client.execute {
-                if (attempt == generation) {
-                    readBusy = false
-                    if (
-                        change == mutation && requestedFloor == floor && requestedParty == selected
-                    ) {
-                        result
-                            .onSuccess { (rows, details) ->
-                                listings = rows
-                                detail = details
-                            }
-                            .onFailure(::failed)
-                        nextRead =
-                            System.nanoTime() +
-                                TimeUnit.SECONDS.toNanos(if (result.isSuccess) 5 else 10)
-                        revision++
-                    }
-                }
+            host.execute {
+                if (attempt == generation)
+                    finishRead(change, requestedFloor, requestedParty, result)
             }
         }
+    }
+
+    private fun loadPresets(uuid: String, attempt: Int) {
+        val saved = runCatching { presetStore.load(uuid) }
+        host.execute {
+            if (attempt == generation) {
+                presetsLoaded = true
+                presetError = saved.isFailure
+                presets = saved.getOrDefault(emptyMap())
+            }
+        }
+    }
+
+    private fun readDetail(
+        rows: List<FinderParty>,
+        requestedParty: String?,
+        credential: String,
+    ): FinderParty? {
+        if (requestedParty == null || rows.none { it.id == requestedParty }) return null
+        return try {
+            FinderProtocol.detail(
+                request(
+                    "party/client/listings/$requestedParty",
+                    null,
+                    credential,
+                ),
+                requestedParty,
+            )
+        } catch (failure: ServiceFailure) {
+            if (failure.statusCode == 404) null else throw failure
+        }
+    }
+
+    private fun finishRead(
+        change: Int,
+        requestedFloor: String,
+        requestedParty: String?,
+        result: Result<Pair<List<FinderParty>, FinderParty?>>,
+    ) {
+        readBusy = false
+        if (change != mutation || requestedFloor != floor || requestedParty != selected) return
+        result
+            .onSuccess { (rows, details) ->
+                listings = rows
+                detail = details
+            }
+            .onFailure(::failed)
+        nextRead = System.nanoTime() + TimeUnit.SECONDS.toNanos(if (result.isSuccess) 5 else 10)
+        revision++
     }
 
     private fun failed(failure: Throwable) {
@@ -335,7 +360,7 @@ class FinderClient(private val client: Minecraft, private val account: NativeAcc
                     else -> "unavailable"
                 }
         offline = code == null || code >= 500
-        if (code == 401) account.load()
+        if (code == 401) host.reloadAccount()
     }
 
     private fun reset() {

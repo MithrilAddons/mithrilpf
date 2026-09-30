@@ -87,5 +87,7 @@ class FinderListingPreview(
         if (extra > 0) text(finderText("editor.preview_classes", extra), dy, Palette.ACCENT)
     }
 
-    override fun updateWidgetNarration(output: NarrationElementOutput) {}
+    override fun updateWidgetNarration(output: NarrationElementOutput) {
+        // Decorative preview; interactive controls provide their own narration.
+    }
 }

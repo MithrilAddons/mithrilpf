@@ -20,6 +20,12 @@ gate. JaCoCo reports cover the client and updater source sets; HTML and XML repo
 are included in the test-report artifact. The scan also includes Python tooling
 and GitHub workflows. Tests are classified separately and the binary icon is excluded.
 
+Minecraft-dependent finder widgets and layout/render adapters are explicitly excluded
+from the coverage metric and require the in-game checks below. Input validation,
+drafts, navigation, authentication, request scheduling, protocol parsing and storage
+remain included. Tests use queued client-thread callbacks to exercise account changes,
+stale replies, credential failures and leader-only invite commands without live services.
+
 Scanner output is in **Actions → Verify → Verify (ubuntu-24.04) → SonarQube analysis**.
 The repository needs a `SONAR_TOKEN` Actions secret and SonarQube automatic analysis
 must be off. Fork and Dependabot PRs run verification without the secret or scanner;
