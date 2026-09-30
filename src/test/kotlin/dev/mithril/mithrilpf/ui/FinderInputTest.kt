@@ -62,4 +62,74 @@ class FinderInputTest {
         for (raw in listOf("51", "0", "NaN")) assertFails { metricInput(FinderMetric.CLASS, raw) }
         assertFails { metricInput(FinderMetric.SS, "20.01") }
     }
+
+    @Test
+    fun editingPreservesBlockedPlayersAndClassRulesWithoutRepublishingIdentity() {
+        val json =
+            com.google.gson.JsonParser.parseString(
+                    javaClass.getResource("/contracts/party-v1.json")!!.readText()
+                )
+                .asJsonObject
+                .getAsJsonObject("state")
+        val party =
+            dev.mithril.mithrilpf.finder.FinderProtocol.state(
+                    json.toString(),
+                    json.getAsJsonObject("you").get("uuid").asString,
+                )!!
+                .party!!
+        val draft =
+            FinderDraft(
+                "M7",
+                party.copy(
+                    members =
+                        party.members.mapIndexed { index, member ->
+                            member.copy(leader = index == 0)
+                        },
+                    slots = party.slots.map { it.copy(role = DungeonRole.MAGE) },
+                    rules =
+                        FinderRules(
+                            mapOf(FinderMetric.POWER to 1300),
+                            mapOf(DungeonRole.MAGE to mapOf(FinderMetric.CLASS to 40)),
+                        ),
+                    blocked = mapOf("b".repeat(32) to "Synthetic"),
+                ),
+            )
+        draft.names = "SyntheticTwo, SyntheticThree SyntheticTwo"
+        val body = draft.body(true)
+        assertEquals(
+            listOf("SyntheticTwo", "SyntheticThree"),
+            body.getAsJsonArray("block_names").map { it.asString },
+        )
+        assertEquals(listOf("b".repeat(32)), body.getAsJsonArray("blocked").map { it.asString })
+        assertEquals(false, body.has("leader_class"))
+        assertEquals(DungeonRole.MAGE, draft.leader)
+        assertEquals(true, draft.duplicates)
+        assertEquals(List(5) { DungeonRole.MAGE }, draft.preset().slots)
+        assertEquals(40, draft.preset().rules.perClass[DungeonRole.MAGE]?.get(FinderMetric.CLASS))
+        assertEquals(party.id, draft.partyId)
+    }
+
+    @Test
+    fun invalidNamesAndHiddenThresholdsCannotBeSubmitted() {
+        val draft = FinderDraft("F7")
+        draft.shared[FinderMetric.CATACOMBS] = "bad"
+        assertFails { draft.body(false) }
+        assertEquals(FinderMetric.CATACOMBS, draft.error)
+        draft.shared.clear()
+        for (names in listOf("invalid/name", (1..101).joinToString(" ") { "Player$it" })) {
+            draft.names = names
+            assertFails { draft.body(false) }
+            assertEquals(true, draft.invalidNames)
+        }
+        draft.names = "Valid_Name"
+        draft.duplicates = true
+        draft.slots = List(5) { DungeonRole.MAGE }
+        assertEquals(5, draft.body(false).getAsJsonArray("roles").size())
+        assertEquals(false, draft.invalidNames)
+        assertNull(draft.error)
+        assertEquals("1.1", steppedRequirement(FinderMetric.SS, "1", 1))
+        assertEquals("—", metricText(FinderMetric.POWER, null))
+        assertEquals("1,400", metricText(FinderMetric.POWER, 1400.0))
+        assertEquals("1.23", metricText(FinderMetric.SS, 1230.0))
+    }
 }

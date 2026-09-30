@@ -285,30 +285,31 @@ class FinderBrowse(
     ) {
         page.label(finderText("browse.requirements"), width, Palette.MUTED)
 
-        if (role != null) {
-            val requirements = party.rules.forRole(role)
-            if (requirements.isEmpty())
-                page.label(finderText("browse.no_rules"), width, Palette.SUCCESS)
-            for ((metric, threshold) in requirements) {
-                val value = finder.state?.stats?.value(metric, role, party.floor)
-                val meets =
-                    value != null &&
-                        value > 0 &&
-                        if (metric.minimum) value >= threshold else value <= threshold
-                page.label(
-                    finderText(
-                        "browse.compare",
-                        if (meets) "✓" else "×",
-                        finderText("metric.${metric.key}"),
-                        (if (metric.minimum) "≥" else "≤") +
-                            metricText(metric, threshold.toDouble()),
-                        metricText(metric, value),
-                    ),
-                    width,
-                    if (meets) Palette.SUCCESS else Palette.DANGER,
-                )
-            }
-        } else page.label(finderText("browse.choose_role"), width, Palette.MUTED)
+        if (role == null) {
+            page.label(finderText("browse.choose_role"), width, Palette.MUTED)
+            return
+        }
+        val requirements = party.rules.forRole(role)
+        if (requirements.isEmpty())
+            page.label(finderText("browse.no_rules"), width, Palette.SUCCESS)
+        for ((metric, threshold) in requirements) {
+            val value = finder.state?.stats?.value(metric, role, party.floor)
+            val meets =
+                value != null &&
+                    value > 0 &&
+                    if (metric.minimum) value >= threshold else value <= threshold
+            page.label(
+                finderText(
+                    "browse.compare",
+                    if (meets) "✓" else "×",
+                    finderText("metric.${metric.key}"),
+                    (if (metric.minimum) "≥" else "≤") + metricText(metric, threshold.toDouble()),
+                    metricText(metric, value),
+                ),
+                width,
+                if (meets) Palette.SUCCESS else Palette.DANGER,
+            )
+        }
     }
 
     private fun roster(page: LinearLayout, party: FinderParty, width: Int, role: DungeonRole?) {
