@@ -15,15 +15,13 @@ class RecordSyncFlow(
     private var receipt = ""
     private var session: String? = null
     private var expires = 0L
-    private var uploaded: RecordSnapshot? = null
 
-    fun sync(
+    fun authenticate(
         uuid: String,
         name: String,
         receiptToken: String,
-        snapshot: RecordSnapshot,
         proveOwnership: (String) -> Unit,
-    ) {
+    ): String {
         require(uuid.matches(Regex("[0-9a-f]{32}")))
         require(name.matches(Regex("[A-Za-z0-9_]{1,16}")))
         require(receiptToken.matches(Regex("[A-Za-z0-9_-]{43}")))
@@ -31,19 +29,19 @@ class RecordSyncFlow(
             account = uuid
             receipt = receiptToken
             session = null
-            uploaded = null
         }
-        if (snapshot.records.isEmpty() || snapshot == uploaded) return
         try {
             check(!Thread.currentThread().isInterrupted)
             if (session == null || clock() >= expires) {
                 OwnershipProof.serialized {
+                    val nonce = OwnershipProof.nonce()
                     val challenge =
                         parse(
                             post(
                                 "sync-challenge",
                                 JsonObject().apply {
                                     addProperty("version", 1)
+                                    addProperty("client_nonce", nonce)
                                     addProperty("uuid", uuid)
                                     addProperty("name", name)
                                     addProperty("receipt_token", receiptToken)
@@ -52,8 +50,7 @@ class RecordSyncFlow(
                             )
                         )
                     val id = token(challenge, "challenge_id")
-                    val serverId = challenge.get("server_id")?.asString ?: error("Missing proof")
-                    require(serverId.matches(Regex("[0-9a-f]{39}")))
+                    val serverId = OwnershipProof.serverId(challenge, nonce, uuid, "sync")
                     check(!Thread.currentThread().isInterrupted)
                     proveOwnership(serverId)
                     check(!Thread.currentThread().isInterrupted)
@@ -74,22 +71,35 @@ class RecordSyncFlow(
                     expires = clock() + 840_000_000_000L
                 }
             }
-            check(!Thread.currentThread().isInterrupted)
-            val result = parse(post("sync-records", snapshot.json(), session))
-            require(result.getAsJsonObject("user").get("uuid").asString == uuid)
-            require(result.get("accepted")?.toString() == snapshot.records.size.toString())
-            uploaded = snapshot
+            return requireNotNull(session)
         } catch (exception: Exception) {
             session = null
             throw exception
         }
     }
 
+    fun process(
+        uuid: String,
+        name: String,
+        receiptToken: String?,
+        event: RecordEvent?,
+        live: LiveRecordFlow,
+        proveOwnership: (String) -> Unit,
+    ): String? {
+        if (event != null && !live.accepts(event)) return "local_only"
+        if (receiptToken == null) {
+            clear()
+            live.clear()
+            return "unlinked"
+        }
+        val credential = authenticate(uuid, name, receiptToken, proveOwnership)
+        return event?.let { live.send(it, credential) }
+    }
+
     fun clear() {
         account = ""
         receipt = ""
         session = null
-        uploaded = null
     }
 
     private fun parse(text: String): JsonObject {

@@ -39,12 +39,14 @@ class PartyFlow(
         check(!Thread.currentThread().isInterrupted)
         if (token == null || clock() >= expires)
             OwnershipProof.serialized {
+                val nonce = OwnershipProof.nonce()
                 val challenge =
                     PartyProtocol.parse(
                         post(
                             "party-challenge",
                             JsonObject().apply {
                                 addProperty("version", 1)
+                                addProperty("client_nonce", nonce)
                                 addProperty("uuid", uuid)
                                 addProperty("name", name)
                                 addProperty("receipt_token", receiptToken)
@@ -53,8 +55,7 @@ class PartyFlow(
                         )
                     )
                 val id = credential(challenge, "challenge_id")
-                val serverId = challenge.get("server_id").asString
-                require(Regex("[0-9a-f]{39}").matches(serverId))
+                val serverId = OwnershipProof.serverId(challenge, nonce, uuid, "party")
                 check(!Thread.currentThread().isInterrupted)
                 proveOwnership(serverId)
                 check(!Thread.currentThread().isInterrupted)

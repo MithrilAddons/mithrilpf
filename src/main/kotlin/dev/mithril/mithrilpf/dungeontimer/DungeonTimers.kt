@@ -5,6 +5,8 @@ import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import dev.mithril.mithrilpf.sync.RecordCapture
+import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.UUID
@@ -49,6 +51,13 @@ object DungeonTimers {
     private var detector = RoomDetector()
     private var score = DungeonScore()
     private val tab = linkedMapOf<UUID, String>()
+    private val recordCapture = RecordCapture()
+    private const val BOSS_ENTRY = "Boss Entry"
+
+    fun pollSyncEvent(): RecordEvent? = recordCapture.poll()
+
+    fun clearSyncEvents() = recordCapture.clearEvents()
+
     var settings = TrackingSettings()
         private set
 
@@ -158,12 +167,14 @@ object DungeonTimers {
         ghost = false
         tab.clear()
         score = DungeonScore()
+        recordCapture.reset()
         detector = RoomDetector()
         rooms = client.player?.gameProfile?.name?.let(::SoloRoomState)
         solo = client.player?.gameProfile?.name?.let(::SoloClearState)
     }
 
     private fun invalidate() {
+        recordCapture.invalidate()
         stopped = true
         capture = null
         state = null
@@ -231,13 +242,14 @@ object DungeonTimers {
                 log.warn("Room tracking stopped for this run", e)
             }
         } else rooms?.leave(stamp)
+        recordCapture.sample(stamp, ghost, solo, score, state)
         if (settings.solo && solo?.active == true) {
             val timer = state ?: return
             val elapsed = timer.rows(stamp)["Total"] ?: return
             val estimate =
                 score.estimate(
                     elapsed.realMillis / 1000,
-                    "Boss Entry" in timer.completed,
+                    BOSS_ENTRY in timer.completed,
                     settings.paul,
                 )
             solo
@@ -247,6 +259,7 @@ object DungeonTimers {
                     stamp,
                 )
                 ?.let { time ->
+                    recordCapture.sample(stamp, ghost, solo, score, state, complete = true)
                     record("solo", mapOf("300 Score" to time))
                 }
         }
@@ -303,6 +316,7 @@ object DungeonTimers {
                     entries.forEach { (id, text) ->
                         if (text == null) tab.remove(id) else tab[id] = text
                     }
+                    recordCapture.observeTab(tab)
                     val participants = tab.values.mapNotNull(SoloRoomState::participant)
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
@@ -323,7 +337,7 @@ object DungeonTimers {
                     child is ClientboundEntityEventPacket &&
                         child.eventId.toInt() == 3 &&
                         inDungeon &&
-                        state?.completed?.containsKey("Boss Entry") != true &&
+                        state?.completed?.containsKey(BOSS_ENTRY) != true &&
                         (client.level?.let { child.getEntity(it) } as? Zombie)?.isBaby == true
                 )
                     score.mimic = true
@@ -356,13 +370,22 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
+            recordCapture.observeTab(tab)
+            recordCapture.begin(
+                floor,
+                stamp,
+                System.currentTimeMillis(),
+                settings.solo && solo?.active == true,
+                settings.paul,
+            )
+
             state = DungeonTimerState(floor, splits)
             val required =
                 setOf("Blood Open", "Watcher Clear", "Total") +
                     if (splits.isEmpty()) emptySet()
                     else
                         splits.map { DungeonTimerState.clean(it.name) }.toSet() +
-                            setOf("Portal", "Boss Entry")
+                            setOf("Portal", BOSS_ENTRY)
             capture =
                 DungeonRunCapture(
                     player.uuid.toString(),
@@ -398,6 +421,7 @@ object DungeonTimers {
         val client = Minecraft.getInstance()
         val player = client.player?.uuid?.toString() ?: return
         val floor = floor ?: return
+        recordCapture.terminal(floor, times["Terminals"], now())
         storage.record(kind, player, floor, times) { old, changed ->
             if (client.player?.uuid?.toString() != player) return@record
             changed.forEach { (name, time) ->
@@ -482,7 +506,7 @@ object DungeonTimers {
         when (name) {
             "Blood Open" -> message("blood_rush").string
             "Watcher Clear" -> message("blood_camp").string
-            "Boss Entry" -> message("clear").string
+            BOSS_ENTRY -> message("clear").string
             "Dragons" -> message("wither_king").string
             else -> name
         }
