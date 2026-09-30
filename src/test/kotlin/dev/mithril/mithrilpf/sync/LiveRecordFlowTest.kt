@@ -87,4 +87,61 @@ class LiveRecordFlowTest {
         assertEquals("synced", flow.send(event("terminal-report"), "credential"))
         assertEquals(listOf("terminal-report"), calls)
     }
+
+    @Test
+    fun `queued starts account for age and reject stale or future observations`() {
+        for (age in listOf(-1L, 10001L)) {
+            val start = event("solo-start")
+            now += age * 1_000_000
+            assertEquals("local_only", flow.send(start, "credential"))
+            assertFalse(flow.accepts(event("solo-progress")))
+        }
+        assertTrue(calls.isEmpty())
+        var elapsed = 0L
+        val delayed =
+            LiveRecordFlow(
+                { _, body, _ ->
+                    elapsed = body["elapsed_ms"].asLong
+                    """{"version":2,"status":"active","sequence":0,"attempt_id":"$id","nonce":"$id"}"""
+                },
+                { now },
+            )
+        val start = event("solo-start")
+        now += 1000_000_000
+        assertEquals("tracking", delayed.send(start, "credential"))
+        assertEquals(1000, elapsed)
+        assertTrue(delayed.accepts(event("solo-progress")))
+        assertFalse(delayed.accepts(event("solo-progress", run = 2)))
+        assertTrue(delayed.accepts(event("terminal-report")))
+    }
+
+    @Test
+    fun `invalid acknowledgements cannot advance or complete a live attempt`() {
+        val valid =
+            """{"version":2,"status":"active","sequence":0,"attempt_id":"$id","nonce":"$id"}"""
+        val bad =
+            listOf(
+                "{}",
+                valid.replace("\"version\":2", "\"version\":1"),
+                valid.replace("active", "unknown"),
+                valid.replace("active", "accepted"),
+                valid.replace("\"sequence\":0", "\"sequence\":2"),
+                valid.replace("\"attempt_id\":\"$id\"", "\"attempt_id\":\"short\""),
+                valid.replace("\"nonce\":\"$id\"", "\"nonce\":\"short\""),
+            )
+        for (response in bad) {
+            val broken = LiveRecordFlow({ _, _, _ -> response }, { now })
+            assertFails { broken.send(event("solo-start"), "credential") }
+            assertFalse(broken.accepts(event("solo-progress")))
+        }
+        var response = valid
+        val switched = LiveRecordFlow({ _, _, _ -> response }, { now })
+        switched.send(event("solo-start"), "credential")
+        response =
+            valid
+                .replace("\"sequence\":0", "\"sequence\":1")
+                .replace("\"attempt_id\":\"$id\"", "\"attempt_id\":\"${"z".repeat(43)}\"")
+        assertFails { switched.send(event("solo-progress"), "credential") }
+        assertFalse(switched.accepts(event("solo-progress")))
+    }
 }

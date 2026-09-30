@@ -50,23 +50,25 @@ class LiveRecordFlow(
                 (status == "accepted") ==
                     (event.path == "terminal-report" || body["complete"]?.asBoolean == true)
             )
-            if (event.path != "terminal-report") {
-                val id = response["attempt_id"].asString
-                val nextNonce = response["nonce"].asString
-                val nextSequence = response["sequence"].asInt
-                require(id.matches(Regex("[A-Za-z0-9_-]{43}")))
-                require(nextNonce.matches(Regex("[A-Za-z0-9_-]{43}")))
-                require(nextSequence == if (event.path == "solo-start") 0 else sequence + 1)
-                require(attempt == null || attempt == id)
-                attempt = if (status == "accepted") null else id
-                nonce = nextNonce
-                sequence = nextSequence
-            }
+            if (event.path != "terminal-report") acknowledge(event, response, status)
             return if (status == "accepted") "synced" else "tracking"
         } catch (error: Exception) {
             clear()
             throw error
         }
+    }
+
+    private fun acknowledge(event: RecordEvent, response: JsonObject, status: String) {
+        val id = response["attempt_id"].asString
+        val nextNonce = response["nonce"].asString
+        val nextSequence = response["sequence"].asInt
+        require(id.matches(Regex("[A-Za-z0-9_-]{43}")))
+        require(nextNonce.matches(Regex("[A-Za-z0-9_-]{43}")))
+        require(nextSequence == if (event.path == "solo-start") 0 else sequence + 1)
+        require(attempt == null || attempt == id)
+        attempt = if (status == "accepted") null else id
+        nonce = nextNonce
+        sequence = nextSequence
     }
 
     fun clear() {

@@ -1,12 +1,11 @@
 package dev.mithril.mithrilpf.dungeontimer
 
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import dev.mithril.mithrilpf.sync.RecordCapture
 import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
 import dev.mithril.mithrilpf.ui.Palette
@@ -52,52 +51,21 @@ object DungeonTimers {
     private var detector = RoomDetector()
     private var score = DungeonScore()
     private val tab = linkedMapOf<UUID, String>()
-    private val syncEvents = ArrayDeque<RecordEvent>()
-    private val syncRoster = linkedSetOf<String>()
-    private var syncStart: TimerStamp? = null
-    private var syncRun = 0L
-    private var syncStartedMillis = 0L
-    private var nextSyncSample = 0L
-    private var syncSolo = false
+    private val recordCapture = RecordCapture()
+    private const val BOSS_ENTRY = "Boss Entry"
 
-    fun pollSyncEvent(): RecordEvent? = syncEvents.removeFirstOrNull()
+    fun pollSyncEvent(): RecordEvent? = recordCapture.poll()
 
-    fun clearSyncEvents() = syncEvents.clear()
+    fun clearSyncEvents() = recordCapture.clearEvents()
 
-    private fun syncEvent(path: String, body: JsonObject, stamp: TimerStamp) {
-        if (syncEvents.size >= 8) {
-            syncEvents.clear()
-            syncSolo = false
-            return
-        }
-        body.addProperty("version", 2)
-        syncEvents.addLast(RecordEvent(syncRun, path, body.toString(), stamp.nanos))
-    }
-
-    private fun syncProgress(stamp: TimerStamp, complete: Boolean = false) {
-        if (!syncSolo) return
-        val start = syncStart ?: return
-        if (!complete && stamp.nanos < nextSyncSample) return
-        nextSyncSample = stamp.nanos + 5_000_000_000L
-        val elapsed = stamp - start
-        syncEvent(
-            "solo-progress",
-            JsonObject().apply {
-                addProperty("elapsed_ms", elapsed.realMillis)
-                addProperty("ticks", elapsed.ticks)
-                add("roster", JsonArray().apply { syncRoster.sorted().forEach(::add) })
-                addProperty("dead", ghost)
-                addProperty(
-                    "valid",
-                    solo?.status in setOf("tracking", "awaiting_roster", "completed"),
-                )
-                add("evidence", score.evidence(state?.completed?.containsKey("Boss Entry") == true))
-                addProperty("complete", complete)
-            },
+    private fun syncProgress(stamp: TimerStamp, complete: Boolean = false) =
+        recordCapture.progress(
             stamp,
+            ghost,
+            solo?.status,
+            score.evidence(state?.completed?.containsKey(BOSS_ENTRY) == true),
+            complete,
         )
-        if (complete || solo?.active != true) syncSolo = false
-    }
 
     var settings = TrackingSettings()
         private set
@@ -208,16 +176,14 @@ object DungeonTimers {
         ghost = false
         tab.clear()
         score = DungeonScore()
-        syncStart = null
-        syncRoster.clear()
-        syncSolo = false
+        recordCapture.reset()
         detector = RoomDetector()
         rooms = client.player?.gameProfile?.name?.let(::SoloRoomState)
         solo = client.player?.gameProfile?.name?.let(::SoloClearState)
     }
 
     private fun invalidate() {
-        syncSolo = false
+        recordCapture.invalidate()
         stopped = true
         capture = null
         state = null
@@ -292,7 +258,7 @@ object DungeonTimers {
             val estimate =
                 score.estimate(
                     elapsed.realMillis / 1000,
-                    "Boss Entry" in timer.completed,
+                    BOSS_ENTRY in timer.completed,
                     settings.paul,
                 )
             solo
@@ -359,9 +325,11 @@ object DungeonTimers {
                     entries.forEach { (id, text) ->
                         if (text == null) tab.remove(id) else tab[id] = text
                     }
-                    tab.filterValues { SoloRoomState.participant(it) != null }
-                        .keys
-                        .forEach { syncRoster.add(it.toString().replace("-", "")) }
+                    recordCapture.observeRoster(
+                        tab.filterValues { SoloRoomState.participant(it) != null }
+                            .keys
+                            .map { it.toString().replace("-", "") }
+                    )
                     val participants = tab.values.mapNotNull(SoloRoomState::participant)
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
@@ -382,7 +350,7 @@ object DungeonTimers {
                     child is ClientboundEntityEventPacket &&
                         child.eventId.toInt() == 3 &&
                         inDungeon &&
-                        state?.completed?.containsKey("Boss Entry") != true &&
+                        state?.completed?.containsKey(BOSS_ENTRY) != true &&
                         (client.level?.let { child.getEntity(it) } as? Zombie)?.isBaby == true
                 )
                     score.mimic = true
@@ -415,27 +383,18 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
-            syncRun++
-            syncStart = stamp
-            syncStartedMillis = System.currentTimeMillis()
-            syncRoster.addAll(
+            recordCapture.observeRoster(
                 tab.filterValues { SoloRoomState.participant(it) != null }
                     .keys
                     .map { it.toString().replace("-", "") }
             )
-            syncSolo = floor in setOf("F7", "M7") && settings.solo && solo?.active == true
-            nextSyncSample = stamp.nanos + 5_000_000_000L
-            if (syncSolo)
-                syncEvent(
-                    "solo-start",
-                    JsonObject().apply {
-                        addProperty("floor", floor)
-                        addProperty("elapsed_ms", 0)
-                        addProperty("ticks", 0)
-                        addProperty("paul", settings.paul)
-                    },
-                    stamp,
-                )
+            recordCapture.begin(
+                floor,
+                stamp,
+                System.currentTimeMillis(),
+                settings.solo && solo?.active == true,
+                settings.paul,
+            )
 
             state = DungeonTimerState(floor, splits)
             val required =
@@ -443,7 +402,7 @@ object DungeonTimers {
                     if (splits.isEmpty()) emptySet()
                     else
                         splits.map { DungeonTimerState.clean(it.name) }.toSet() +
-                            setOf("Portal", "Boss Entry")
+                            setOf("Portal", BOSS_ENTRY)
             capture =
                 DungeonRunCapture(
                     player.uuid.toString(),
@@ -479,22 +438,7 @@ object DungeonTimers {
         val client = Minecraft.getInstance()
         val player = client.player?.uuid?.toString() ?: return
         val floor = floor ?: return
-        times["Terminals"]
-            ?.takeIf { floor in setOf("F7", "M7") && syncStart != null && syncRoster.isNotEmpty() }
-            ?.let { time ->
-                syncEvent(
-                    "terminal-report",
-                    JsonObject().apply {
-                        addProperty("report_id", UUID.randomUUID().toString().replace("-", ""))
-                        addProperty("floor", floor)
-                        addProperty("run_started_ms", syncStartedMillis)
-                        add("roster", JsonArray().apply { syncRoster.sorted().forEach(::add) })
-                        addProperty("real_ms", time.realMillis)
-                        addProperty("ticks", time.ticks)
-                    },
-                    now(),
-                )
-            }
+        recordCapture.terminal(floor, times["Terminals"], now())
         storage.record(kind, player, floor, times) { old, changed ->
             if (client.player?.uuid?.toString() != player) return@record
             changed.forEach { (name, time) ->
@@ -579,7 +523,7 @@ object DungeonTimers {
         when (name) {
             "Blood Open" -> message("blood_rush").string
             "Watcher Clear" -> message("blood_camp").string
-            "Boss Entry" -> message("clear").string
+            BOSS_ENTRY -> message("clear").string
             "Dragons" -> message("wither_king").string
             else -> name
         }

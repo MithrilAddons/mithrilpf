@@ -78,6 +78,24 @@ class RecordSyncFlow(
         }
     }
 
+    fun process(
+        uuid: String,
+        name: String,
+        receiptToken: String?,
+        event: RecordEvent?,
+        live: LiveRecordFlow,
+        proveOwnership: (String) -> Unit,
+    ): String? {
+        if (event != null && !live.accepts(event)) return "local_only"
+        if (receiptToken == null) {
+            clear()
+            live.clear()
+            return "unlinked"
+        }
+        val credential = authenticate(uuid, name, receiptToken, proveOwnership)
+        return event?.let { live.send(it, credential) }
+    }
+
     fun clear() {
         account = ""
         receipt = ""

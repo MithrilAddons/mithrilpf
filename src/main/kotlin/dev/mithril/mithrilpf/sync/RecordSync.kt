@@ -56,22 +56,8 @@ class RecordSync(private val client: Minecraft) : AutoCloseable {
                     val result =
                         try {
                             val receipt = store.load(uuid)
-                            if (event != null && !live.accepts(event)) {
-                                "local_only"
-                            } else if (receipt == null) {
-                                flow.clear()
-                                live.clear()
-                                "unlinked"
-                            } else {
-                                val credential =
-                                    flow.authenticate(uuid, user.name, receipt.token) { serverId ->
-                                        service.joinServer(
-                                            user.profileId,
-                                            user.accessToken,
-                                            serverId,
-                                        )
-                                    }
-                                if (event == null) null else live.send(event, credential)
+                            flow.process(uuid, user.name, receipt?.token, event, live) { serverId ->
+                                service.joinServer(user.profileId, user.accessToken, serverId)
                             }
                         } catch (_: Exception) {
                             // Never log exceptions: HTTP/proof failures can include credentials.

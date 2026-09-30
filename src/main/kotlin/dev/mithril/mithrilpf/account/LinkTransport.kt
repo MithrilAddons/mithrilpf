@@ -17,7 +17,10 @@ object LinkTransport {
         return request("auth/$path", body, null)
     }
 
-    fun syncPost(path: String, body: JsonObject, token: String?): String {
+    fun syncPost(path: String, body: JsonObject, token: String?): String =
+        request(syncPath(path, token), body, token)
+
+    internal fun syncPath(path: String, token: String?): String {
         require(
             path in
                 setOf(
@@ -30,7 +33,7 @@ object LinkTransport {
         )
         require(path.startsWith("sync-") == (token == null))
         if (token != null) require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
-        return request(if (path.startsWith("sync-")) "auth/$path" else "records/$path", body, token)
+        return if (path.startsWith("sync-")) "auth/$path" else "records/$path"
     }
 
     fun partyPost(path: String, body: JsonObject, token: String?): String {
