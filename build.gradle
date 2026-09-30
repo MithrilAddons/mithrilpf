@@ -3,6 +3,8 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
     id 'org.jetbrains.kotlin.plugin.serialization' version "${kotlin_version}"
     id 'com.diffplug.spotless' version '8.10.2'
+    id 'jacoco'
+    id 'org.sonarqube' version '7.5.0.8588'
 }
 
 version = project.mod_version
@@ -67,6 +69,32 @@ processResources {
 sourcesJar { from sourceSets.updater.allSource }
 kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25 } }
 tasks.withType(JavaCompile).configureEach { options.release = 25 }
+
+jacoco { toolVersion = '0.8.15' }
+jacocoTestReport {
+    dependsOn test
+    sourceSets sourceSets.main, sourceSets.updater
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+test { finalizedBy jacocoTestReport }
+
+sonar {
+    properties {
+        property 'sonar.projectKey', 'MithrilAddons_mithrilpf'
+        property 'sonar.organization', 'mithriladdons'
+        property 'sonar.sourceEncoding', 'UTF-8'
+        property 'sonar.sources', 'src/main,src/updater,tools,.github,build.gradle,settings.gradle,gradle/verification-metadata.xml'
+        property 'sonar.tests', 'src/test,tools/tests'
+        property 'sonar.exclusions', 'src/main/resources/assets/mithrilpf/icon.png,tools/tests/**'
+        property 'sonar.java.binaries', files(sourceSets.main.output.classesDirs, sourceSets.updater.output.classesDirs)
+        property 'sonar.coverage.jacoco.xmlReportPaths', 'build/reports/jacoco/test/jacocoTestReport.xml'
+        property 'sonar.python.version', '3.14'
+    }
+}
+tasks.named('sonar') { dependsOn jacocoTestReport }
 
 spotless {
     java {

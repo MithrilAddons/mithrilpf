@@ -13,6 +13,29 @@ read-only permissions, pinned actions and no deployment credentials. Required jo
 are `Verify (ubuntu-24.04)` and `Verify (windows-2025)`.
 Build/package guards are not malware scanning or proof of runtime correctness.
 
+## SonarQube analysis
+
+The Linux verification job runs SonarQube after the build and waits for its quality
+gate. JaCoCo reports cover the client and updater source sets; HTML and XML reports
+are included in the test-report artifact. The scan also includes Python tooling
+and GitHub workflows. Tests are classified separately and the binary icon is excluded.
+
+Scanner output is in **Actions → Verify → Verify (ubuntu-24.04) → SonarQube analysis**.
+The repository needs a `SONAR_TOKEN` Actions secret and SonarQube automatic analysis
+must be off. Fork and Dependabot PRs run verification without the secret or scanner;
+their merged code is analyzed on main. Release tag builds do not submit analyses.
+For a local scan, supply `SONAR_TOKEN` through the environment and run
+`gradlew.bat build sonar` (Linux: `sh gradlew build sonar`).
+
+Gradle checks dependency and plugin artifacts against the SHA-256 values in
+`gradle/verification-metadata.xml`. When updating dependencies, regenerate the
+metadata with `gradlew.bat --write-verification-metadata sha256 build sonarResolver`
+and review the changed artifacts and their provenance before committing it.
+Do not disable verification or accept an unexplained checksum mismatch.
+The exact locally generated Minecraft JAR is exempt because Loom's processed
+output differs between builds; Loom verifies the original downloads against
+Mojang's hashes. This exception does not apply to downloaded libraries or plugins.
+
 ## Manual regression checks
 
 - Discord: start with Discord closed, then open/restart it. Check `/mpf`'s Rich
