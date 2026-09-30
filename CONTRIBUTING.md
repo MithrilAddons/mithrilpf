@@ -5,8 +5,8 @@ compatibility changes. Use `feat/`, `fix/`, `chore/`, `refactor/`, or `docs/` fo
 by a short lowercase kebab-case description. CI checks PR branch names, with an
 exception only for branches authored by dependabot[bot].
 
-Use signed commits; SSH push access alone does not enable signing. Configure an
-owner-approved public signing key locally and register it with GitHub. Never commit
+Use signed commits; SSH push access alone does not enable signing. Configure commit
+signing locally and register your public signing key with GitHub. Never commit
 keys, tokens, recordings, logs, or real player data. Use normal pull_request CI,
 not privileged workflows that run untrusted PR code with secrets.
 

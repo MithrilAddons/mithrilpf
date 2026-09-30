@@ -25,7 +25,7 @@ def main():
     version = read_version((ROOT / "gradle.properties").read_text(encoding="utf-8"))
     if os.environ.get("GITHUB_REF_TYPE") == "tag":
         validate_tag(version, os.environ["GITHUB_REF_NAME"])
-        # Publishing tags must name a reviewed commit already merged into main.
+        # Release tags must point to a commit on main.
         subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", "origin/main"],
                        cwd=ROOT, check=True)
     print(f"Mod version: {version}")

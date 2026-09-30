@@ -2,7 +2,6 @@
 
 MithrilPF is a standalone Fabric client for Minecraft 26.1.2. Required dependencies
 are Fabric Loader, Fabric API and Fabric Language Kotlin; Mod Menu is optional.
-No Noamm, SkyHanni or MithrilAddons dependency is required.
 
 Original MithrilPF code is licensed under [MIT](../LICENSE).
 Third-party licenses are documented in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)
@@ -22,10 +21,9 @@ and included in the gameplay JAR.
    can be linked using the QR/link/code options.
 
 `/mpc <message>` chats with your linked party on the website and in Minecraft.
-This beta is for feedback: five-player handoff and the new in-game chat still
-need broader real-game testing. SS tracking is not included. Party listings and
-chat are temporary and reset when the backend restarts; linked accounts and PBs
-are stored separately. Back up `config/mithrilpf/` before trying new builds.
+SS tracking is not included. Party listings and chat are temporary and reset when
+the backend restarts; linked accounts and PBs are stored separately. Back up
+`config/mithrilpf/` before trying new builds.
 
 ## Build and contribute
 
@@ -47,8 +45,6 @@ Keep Kotlin feature logic separate from thin Java mixins. Client state belongs
 to the client thread; bounded workers handle disk/network work. Tests use fakes
 and temporary storage, never real Minecraft sessions or user configuration.
 Use the active game font and the shared Palette constants; no bundled fonts.
-Public documentation is limited to this guide, testing, contribution rules and
-required license notices. Plans and historical verification notes stay local.
 
 ## Use and storage
 
@@ -65,25 +61,25 @@ link. Switching views keeps the same pending sign-in. Links expire after five mi
 confirmation. Keep the screen open until confirmed. Cancelling or expiring a new
 attempt leaves the previous saved connection intact. Never share codes or QR screenshots.
 
-## Versions and milestone releases
+## Versions and releases
 
 `mod_version` in `gradle.properties` is the single version source for Fabric metadata,
 Mod Menu and JAR filenames. While pre-1.0, use `0.MINOR.PATCH`: increment MINOR for
 feature milestones and PATCH for fixes. Use `-alpha.N`, `-beta.N` or `-rc.N` for test
-builds; this implementation starts the `0.2.0-rc.1` milestone. Do not reuse a version
-for a published artifact. After 1.0, increment MAJOR for breaking changes, MINOR for
-compatible features, PATCH for fixes. API/config versions are separate and must not
-be bumped just because the mod version changes.
+builds. Do not reuse a version for a published artifact. After 1.0, increment
+MAJOR for breaking changes, MINOR for compatible features, PATCH for fixes.
+API/config versions are separate and must not be bumped just because the mod
+version changes.
 
-Milestone releases are deliberate, not created for every commit. After a version
-bump PR is reviewed and merged into main, create and push a signed tag matching
-the version exactly (for example `v0.2.0`). The Release workflow validates the tag,
-main ancestry and JAR metadata, runs the full Windows/Linux checks, and creates a
+After a version bump PR is reviewed and merged into main, create and push a signed
+tag matching the version exactly (for example `v0.2.0`). The Release workflow
+validates the tag, main ancestry and JAR metadata, runs the full Windows/Linux
+checks, and creates a
 **draft** GitHub release with the tested Linux-built gameplay JAR, SHA-256 checksum
 and generated notes. Prerelease tags are marked accordingly. A maintainer reviews
 the notes and performs the manual tests before publishing the draft. Never move an
 existing release tag; fix forward with a new version. Local untagged builds do not
-create releases, and uploading artifacts to Modrinth is not part of this workflow.
+create releases.
 
 ## Automatic updates
 
@@ -146,7 +142,7 @@ require detector updates. Records are observations, not anti-cheat attestations.
 Settings, per-account PBs and run history live under `config/mithrilpf/`.
 Malformed/newer settings are not overwritten; unknown fields survive edits.
 PB files discourage casual manual edits but are not tamper-proof. Back up this
-directory to retain records. No old MithrilAddons data is imported automatically.
+directory to retain records.
 
 ## Linked services
 
@@ -176,8 +172,8 @@ Party handoff uses a separate 30-day presence credential; it cannot upload recor
 or log into the browser. All five must be online before one automatic invite round.
 `/mithrilpfreinvite` explicitly retries missing players. Complete English
 `/party list` replies confirm membership. Conflicting game parties stop invites;
-the mod never kicks, disbands or leaves automatically. These flows still need
-multi-account runtime testing. The canonical protocol lives in the web repository's
+the mod never kicks, disbands or leaves automatically. The canonical protocol
+lives in the web repository's
 [API guide](https://github.com/MithrilAddons/web/blob/main/docs/API.md).
 
 `/mpc <message>` (also `/mithrilpfchat <message>`) sends to the linked Mithril party,

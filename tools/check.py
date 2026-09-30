@@ -58,11 +58,11 @@ def verify_jar(path):
             raise ValueError("Incorrect updater distribution marker")
         expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
         if set(metadata["depends"]) != expected:
-            raise ValueError("Unexpected required dependency; review this policy explicitly")
+            raise ValueError("Unexpected required dependency")
         if metadata.get("mixins") != ["mithrilpf.mixins.json"]:
             raise ValueError("Unexpected mixin configuration or embedded dependency")
         if metadata.get("jars") != [{"file": "META-INF/jars/qrcodegen-1.8.0.jar"}]:
-            raise ValueError("Only the reviewed local QR generator may be embedded")
+            raise ValueError("Expected qrcodegen-1.8.0.jar as the only embedded dependency")
         jar.read("META-INF/jars/qrcodegen-1.8.0.jar")
         jar.read("META-INF/licenses/LICENSE_qrcodegen")
         with zipfile.ZipFile(io.BytesIO(jar.read("assets/mithrilpf/updater.jar"))) as helper:
@@ -71,7 +71,7 @@ def verify_jar(path):
                 raise ValueError("Updater license mismatch")
         mixins = json.loads(jar.read("mithrilpf.mixins.json"))
         if mixins["client"] != ["DungeonConnectionMixin"]:
-            raise ValueError("Unexpected packet hooks; explicit review required")
+            raise ValueError("Unexpected packet hooks")
         jar.read("dev/mithril/mithrilpf/mixin/DungeonConnectionMixin.class")
         jar.read("META-INF/licenses/LICENSE_noamm")
         for entries in metadata["entrypoints"].values():
