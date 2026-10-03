@@ -31,7 +31,8 @@ def release_version(tag):
     if not tag.startswith("v") or not match:
         raise ValueError("Expected a release tag vX.Y.Z[-alpha.N/beta.N/rc.N]")
     channel = match.group(4)
-    return version, "alpha" if channel == "alpha" else "beta" if channel else "release"
+    channels = {None: "release", "alpha": "alpha", "beta": "beta", "rc": "beta"}
+    return version, channels[channel]
 
 
 def prepare(release, tag, artifact, checksum):
@@ -46,15 +47,15 @@ def prepare(release, tag, artifact, checksum):
         raise ValueError("Release JAR does not match SHA256SUMS")
     with zipfile.ZipFile(io.BytesIO(artifact)) as jar:
         metadata = json.loads(jar.read("fabric.mod.json"))
-        marker = dict(line.split("=", 1) for line in
-                      jar.read("assets/mithrilpf/build.properties").decode().splitlines()
-                      if line and not line.startswith("#"))
+        marker_lines = jar.read("assets/mithrilpf/build.properties").decode().splitlines()
+        marker = {key: value for key, value in
+                  (line.split("=", 1) for line in marker_lines if line and not line.startswith("#"))}
     if (metadata["id"] != "mithrilpf" or metadata["version"] != version
             or metadata["environment"] != "client"
             or marker != {"version": version, "officialRelease": "true"}):
         raise ValueError("Expected the matching official client release JAR")
     minecraft = metadata["depends"]["minecraft"]
-    if not isinstance(minecraft, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", minecraft):
+    if not isinstance(minecraft, str) or not re.fullmatch(r"\d+(?:\.\d+)+", minecraft, flags=re.ASCII):
         raise ValueError("An exact Minecraft version is required for Modrinth")
     return {
         "name": release["name"] or f"MithrilPF {version}",

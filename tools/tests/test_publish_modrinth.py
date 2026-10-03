@@ -1,6 +1,8 @@
 import hashlib
 import io
 import json
+import os
+from pathlib import Path
 import unittest
 from email.parser import BytesParser
 from email.policy import default
@@ -8,7 +10,7 @@ from unittest.mock import patch
 import urllib.error
 import zipfile
 
-from tools.publish_modrinth import already_uploaded, multipart, prepare, release_version, request
+from tools.publish_modrinth import already_uploaded, main, multipart, prepare, release_version, request
 
 
 class ModrinthPublishingTest(unittest.TestCase):
@@ -59,9 +61,10 @@ class ModrinthPublishingTest(unittest.TestCase):
                 self.prepare(artifact)
 
     def test_rejects_corrupt_checksum(self):
+        artifact = self.artifact()
         with self.assertRaisesRegex(ValueError, "SHA256SUMS"):
             prepare({"isDraft": False, "tagName": "v0.2.0-rc.7", "isPrerelease": True},
-                    "v0.2.0-rc.7", self.artifact(), "wrong checksum")
+                    "v0.2.0-rc.7", artifact, "wrong checksum")
 
     def test_retry_skips_same_artifact_and_rejects_conflicts(self):
         artifact = self.artifact()
@@ -84,6 +87,49 @@ class ModrinthPublishingTest(unittest.TestCase):
         self.assertEqual(payload, json.loads(metadata.get_payload(decode=True)))
         self.assertEqual(artifact, file.get_payload(decode=True))
         self.assertEqual("mithrilpf-0.2.0-rc.7.jar", file.get_filename())
+
+    @patch("urllib.request.urlopen")
+    def test_authenticated_request(self, urlopen):
+        urlopen.return_value.__enter__.return_value = io.BytesIO(b'{"id":"version-id"}')
+        self.assertEqual({"id": "version-id"}, request("/version", "test-token", b"body", "test/type"))
+        req = urlopen.call_args.args[0]
+        self.assertEqual("test-token", req.get_header("Authorization"))
+        self.assertEqual(b"body", req.data)
+
+    @patch.dict(os.environ, {"RELEASE_TAG": "v0.2.0-rc.7", "MODRINTH_TOKEN": ""})
+    def test_missing_token_fails_before_network_access(self):
+        with self.assertRaisesRegex(ValueError, "MODRINTH_TOKEN"):
+            main()
+
+    @patch.dict(os.environ, {"RELEASE_TAG": "v0.2.0-rc.7", "MODRINTH_TOKEN": "test-token",
+                             "MODRINTH_PROJECT_ID": "test-project"})
+    @patch("tools.publish_modrinth.request")
+    @patch("tools.publish_modrinth.subprocess.run")
+    @patch("tools.publish_modrinth.subprocess.check_output")
+    def test_full_upload_and_retry(self, release_info, download, api):
+        artifact = self.artifact()
+        release_info.return_value = json.dumps({
+            "tagName": "v0.2.0-rc.7", "isDraft": False, "isPrerelease": True,
+            "name": "MithrilPF", "body": "Notes",
+        })
+
+        def download_artifacts(command, **kwargs):
+            directory = Path(command[command.index("--dir") + 1])
+            filename = "mithrilpf-0.2.0-rc.7.jar"
+            (directory / filename).write_bytes(artifact)
+            (directory / "SHA256SUMS").write_text(f"{hashlib.sha256(artifact).hexdigest()}  {filename}\n")
+
+        download.side_effect = download_artifacts
+        api.side_effect = [{"id": "project-id"}, [], {"id": "version-id"}]
+        main()
+        self.assertEqual("/version", api.call_args.args[0])
+        self.assertIn(b'"project_id": "project-id"', api.call_args.args[2])
+        self.assertIn(artifact, api.call_args.args[2])
+        existing = self.prepare(artifact) | {"files": [{"hashes": {"sha512": hashlib.sha512(artifact).hexdigest()}}]}
+        api.reset_mock()
+        api.side_effect = [{"id": "project-id"}, [existing]]
+        main()
+        self.assertEqual(2, api.call_count)
 
     @patch("urllib.request.urlopen")
     def test_http_failures_do_not_expose_token(self, urlopen):
