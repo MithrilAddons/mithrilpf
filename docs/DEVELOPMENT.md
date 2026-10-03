@@ -105,6 +105,28 @@ the notes and performs the manual tests before publishing the draft. Never move 
 existing release tag; fix forward with a new version. Local untagged builds do not
 create releases.
 
+### Modrinth publishing
+
+Publishing a GitHub release triggers **Publish to Modrinth**, including prereleases.
+It uploads the existing gameplay JAR and release notes, verifies SHA256SUMS and the
+official-build marker, and reads Minecraft compatibility from the JAR. Fabric API
+and Fabric Language Kotlin are required dependencies; Mod Menu is optional.
+Stable versions use Modrinth's Release channel, `-alpha.N` uses Alpha, and
+`-beta.N` / `-rc.N` use Beta. Draft GitHub releases are not uploaded.
+
+Configure the repository Actions secret `MODRINTH_TOKEN` with a Modrinth personal
+access token that has Create versions (`VERSION_CREATE`) permission and access to
+the project. The optional repository variable `MODRINTH_PROJECT_ID` overrides the
+default `mithrilpf` slug. Project review and visibility remain managed by Modrinth.
+
+For a failed upload or an older published release, run **Publish to Modrinth** from
+Actions with its exact GitHub tag. A matching existing version is skipped; a
+conflicting file or compatibility/channel setting fails without overwriting it.
+Uploads require a release with its gameplay JAR and SHA256SUMS still attached.
+Publish GitHub drafts through the UI or a maintainer token: events made with a
+workflow's `GITHUB_TOKEN` do not trigger another workflow. The uploader runs the
+publishing code from main, so merge workflow changes before enabling uploads.
+
 ## Automatic updates
 
 Open `/mpf → Settings`. Auto-update defaults on; **Include pre-releases** defaults
