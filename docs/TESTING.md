@@ -19,6 +19,8 @@ The Linux verification job runs SonarQube after the build and waits for its qual
 gate. JaCoCo reports cover the client and updater source sets; HTML and XML reports
 are included in the test-report artifact. The scan also includes Python tooling
 and GitHub workflows. Tests are classified separately and the binary icon is excluded.
+The Linux job also collects Python tooling branch coverage with coverage.py and
+imports `build/reports/python/coverage.xml` into SonarQube.
 
 Minecraft-dependent finder widgets and layout/render adapters are explicitly excluded
 from the coverage metric and require the in-game checks below. Input validation,
