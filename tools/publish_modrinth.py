@@ -48,8 +48,11 @@ def prepare(release, tag, artifact, checksum):
     with zipfile.ZipFile(io.BytesIO(artifact)) as jar:
         metadata = json.loads(jar.read("fabric.mod.json"))
         marker_lines = jar.read("assets/mithrilpf/build.properties").decode().splitlines()
-        marker = {key: value for key, value in
-                  (line.split("=", 1) for line in marker_lines if line and not line.startswith("#"))}
+        marker = {}
+        for line in marker_lines:
+            if line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                marker[key] = value
     if (metadata["id"] != "mithrilpf" or metadata["version"] != version
             or metadata["environment"] != "client"
             or marker != {"version": version, "officialRelease": "true"}):
