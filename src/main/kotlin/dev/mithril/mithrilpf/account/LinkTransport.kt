@@ -27,7 +27,12 @@ object LinkTransport {
     }
 
     fun syncPost(path: String, body: JsonObject, token: String?): String =
-        request(syncPath(path, token), body, token)
+        request(
+            syncPath(path, token),
+            body,
+            token,
+            timeout = if (path == "solo-progress") 2 else 12,
+        )
 
     internal fun syncPath(path: String, token: String?): String {
         require(

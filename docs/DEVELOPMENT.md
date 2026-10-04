@@ -100,7 +100,9 @@ tag matching the version exactly (for example `v0.2.0`). The Release workflow
 validates the tag, main ancestry and JAR metadata, runs the full Windows/Linux
 checks, and creates a
 **draft** GitHub release with the tested Linux-built gameplay JAR, SHA-256 checksum
-and generated notes. Prerelease tags are marked accordingly. A maintainer reviews
+and reviewed notes from `docs/releases/<mod_version>.md`. Follow the
+[announcement standard](RELEASING.md) when preparing that file in the version-bump
+PR. Prerelease tags are marked accordingly. A maintainer reviews
 the notes and performs the manual tests before publishing the draft. Never move an
 existing release tag; fix forward with a new version. Local untagged builds do not
 create releases.
