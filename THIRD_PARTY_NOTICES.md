@@ -26,6 +26,10 @@ and participant recognition derive from
 by Noamm9 and contributors, under CC0-1.0. The standalone score calculation is
 adapted from that revision's `ScoreCalculation.kt` and `DungeonListener.kt`.
 The license is in `LICENSES/LICENSE_noamm` and packaged under `META-INF/licenses`.
+Structured PB map capture also adapts the hotbar tile, connection and marker rules
+from `HotbarMapScanner.kt`, `RoomType.kt` and `DoorType.kt` at
+[NoammAddons e5c286c](https://github.com/Noamm9/NoammAddons/tree/e5c286c19ae7860242a413bdbde8e7f9882ff12b),
+under the same CC0-1.0 license. No Noamm runtime dependency is used.
 
 `dungeon-splits.json` and `solo-rooms.json` contain reduced factual snapshots
 from Noamm 1.2.6. Room data contains names, types, hashes and secret counts,

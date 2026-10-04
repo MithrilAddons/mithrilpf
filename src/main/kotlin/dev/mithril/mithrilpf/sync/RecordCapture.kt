@@ -53,6 +53,7 @@ class RecordCapture {
         score: DungeonScore,
         timer: DungeonTimerState?,
         complete: Boolean = false,
+        map: JsonObject? = null,
     ) {
         if (!solo || (!complete && stamp.nanos < nextSample)) return
         progress(
@@ -61,6 +62,7 @@ class RecordCapture {
             state?.status,
             score.evidence(timer?.completed?.containsKey("Boss Entry") == true),
             complete,
+            map,
         )
     }
 
@@ -95,6 +97,7 @@ class RecordCapture {
         status: String?,
         evidence: JsonObject,
         complete: Boolean = false,
+        map: JsonObject? = null,
     ) {
         if (!solo) return
         val elapsed = stamp - requireNotNull(start)
@@ -110,6 +113,7 @@ class RecordCapture {
                 addProperty("valid", status in setOf("tracking", "awaiting_roster", "completed"))
                 add("evidence", evidence)
                 addProperty("complete", complete)
+                if (complete && map != null) add("map", map.deepCopy())
             },
             stamp,
         )
