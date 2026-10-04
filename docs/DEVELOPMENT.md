@@ -185,6 +185,17 @@ require three samples; M7 has fallback estimates before then. Unknown/missing
 observations do not create fabricated PBs. Room/map or server-format changes can
 require detector updates. Records are observations, not anti-cheat attestations.
 
+New qualifying F7/M7 solo clears capture a structured dungeon map at 300 score,
+using Minecraft map pixels, loaded room columns and action-bar secret counts.
+Capture runs even when room timers are disabled. Room names/types, tile shape,
+doors, clear states and found/total secrets accompany the completion report;
+no screenshot, individual secret coordinates or other mod's state is uploaded.
+Unvisited rooms start at zero; completed markers confirm the room total. Missing
+capture data stays unknown rather than inventing a count. The mod is standalone
+and does not require or communicate with Noamm or another dungeon mod.
+The website retains only the current best map per player/floor and the Discord
+time links to it. Older PBs without map data remain valid.
+
 Settings, per-account PBs and run history live under `config/mithrilpf/`.
 Malformed/newer settings are not overwritten; unknown fields survive edits.
 PB files discourage casual manual edits but are not tamper-proof. Back up this

@@ -100,7 +100,7 @@ object LinkTransport {
         limit: Int = 16384,
         timeout: Long = 12,
     ): String {
-        require(body == null || body.toString().toByteArray(Charsets.UTF_8).size <= 4096)
+        validateBody(path, body)
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -136,6 +136,11 @@ object LinkTransport {
                     throw ServiceFailure(response.statusCode(), failureReason(response.body()))
                 return response.body()
             }
+    }
+
+    internal fun validateBody(path: String, body: JsonObject?) {
+        val maximum = if (path == "records/solo-progress") 32768 else 4096
+        require(body == null || body.toString().toByteArray(Charsets.UTF_8).size <= maximum)
     }
 
     internal fun failureReason(body: String): String? = runCatching {

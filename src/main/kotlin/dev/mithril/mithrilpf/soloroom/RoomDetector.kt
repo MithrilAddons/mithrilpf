@@ -13,6 +13,7 @@ import net.minecraft.world.level.saveddata.maps.MapId
 
 /** Client-thread only. Maximum two loaded 129-block columns per tick; no network lookup. */
 class RoomDetector {
+    private val runMap = RunMapCapture()
     private val rooms = arrayOfNulls<SoloRoomDefinition>(36)
     private val retry = IntArray(36)
     private val tokens = IdentityHashMap<Block, Int>()
@@ -27,15 +28,22 @@ class RoomDetector {
         state: SoloRoomState,
         floor: String,
         now: TimerStamp,
+        captureSolo: Boolean = false,
         result: (String, Map<String, SplitTime>) -> Unit,
     ) {
         val player = client.player ?: return
         val tile = SoloRoomMap.tile(player.x, player.z)
-        if (!state.eligible || tile == null || player.isDeadOrDying || player.isSpectator) {
+        if (
+            (!state.eligible && !captureSolo) ||
+                tile == null ||
+                player.isDeadOrDying ||
+                player.isSpectator
+        ) {
             state.leave(now)
             return
         }
         ticks++
+        if (captureSolo) runMap.visit(tile)
         identify(client, tile)
         identify(client, scan++ % 36)
         val id = player.inventory.getItem(8).get(DataComponents.MAP_ID) ?: mapId
@@ -45,6 +53,7 @@ class RoomDetector {
             calibration = SoloRoomMap.calibrate(colors, floor)
         }
         val map = calibration
+        if (!state.eligible) return
         val room = rooms[tile]
         val color = if (map != null && colors != null) map.color(colors, tile) else 0
         if (room != null && room.tracked && color != 0 && color != 18) {
@@ -70,6 +79,17 @@ class RoomDetector {
                 if (times.isNotEmpty()) result(definition.name, times)
             }
         }
+    }
+
+    fun observeSecrets(client: Minecraft, text: String) {
+        val player = client.player ?: return
+        runMap.observeSecrets(SoloRoomMap.tile(player.x, player.z), text)
+    }
+
+    fun snapshot(client: Minecraft): com.google.gson.JsonObject? {
+        val id = client.player?.inventory?.getItem(8)?.get(DataComponents.MAP_ID) ?: mapId
+        val colors = id?.let { client.level?.getMapData(it)?.colors }
+        return runMap.snapshot(calibration, colors, rooms.toList())
     }
 
     private fun identify(client: Minecraft, tile: Int) {

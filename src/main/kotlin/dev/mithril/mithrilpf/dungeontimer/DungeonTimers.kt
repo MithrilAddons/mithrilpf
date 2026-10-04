@@ -230,10 +230,16 @@ object DungeonTimers {
         val box = floor?.lastOrNull()?.digitToIntOrNull()?.let { bounds.getOrNull(it - 1) }
         if (box?.contains(player.position()) == true)
             state?.let { record("splits", it.enterBoss(stamp)) }
-        if (settings.rooms && !ghost) {
+        if ((settings.rooms || (settings.solo && solo?.active == true)) && !ghost) {
             try {
                 floor?.let {
-                    detector.tick(client, rooms!!, it, stamp) { name, times ->
+                    detector.tick(
+                        client,
+                        rooms!!,
+                        it,
+                        stamp,
+                        settings.solo && solo?.active == true,
+                    ) { name, times ->
                         roomResult(name, times)
                     }
                 }
@@ -259,7 +265,15 @@ object DungeonTimers {
                     stamp,
                 )
                 ?.let { time ->
-                    recordCapture.sample(stamp, ghost, solo, score, state, complete = true)
+                    recordCapture.sample(
+                        stamp,
+                        ghost,
+                        solo,
+                        score,
+                        state,
+                        complete = true,
+                        map = detector.snapshot(client),
+                    )
                     record("solo", mapOf("300 Score" to time))
                 }
         }
@@ -272,6 +286,7 @@ object DungeonTimers {
             if (
                 child !is ClientboundPingPacket &&
                     child !is ClientboundSystemChatPacket &&
+                    child !is ClientboundSetActionBarTextPacket &&
                     child !is ClientboundSetPlayerTeamPacket &&
                     child !is ClientboundPlayerInfoUpdatePacket &&
                     child !is ClientboundPlayerInfoRemovePacket &&
@@ -280,6 +295,13 @@ object DungeonTimers {
             )
                 return@visitDungeonPackets
             val received = System.nanoTime()
+            val actionBar =
+                when (child) {
+                    is ClientboundSetActionBarTextPacket -> child.text.string
+                    is ClientboundSystemChatPacket ->
+                        if (child.overlay()) child.content().string else null
+                    else -> null
+                }?.let(DungeonTimerState::clean)
             val chat =
                 (child as? ClientboundSystemChatPacket)
                     ?.takeUnless { it.overlay() }
@@ -309,6 +331,9 @@ object DungeonTimers {
                 if (!settings.enabled || !ready) return@execute
                 if (child is ClientboundPingPacket && clock.accept(child.id, bundled)) ticks++
                 if (stopped) return@execute
+                if (inDungeon && settings.solo && solo?.active == true) {
+                    actionBar?.let { detector.observeSecrets(client, it) }
+                }
                 team?.let { observeLines(listOf(it)) }
                 if (child is ClientboundPlayerInfoRemovePacket)
                     child.profileIds().forEach(tab::remove)

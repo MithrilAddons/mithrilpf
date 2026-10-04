@@ -13,6 +13,20 @@ import kotlin.test.*
 class RecordCaptureTest {
     private val capture = RecordCapture()
 
+    @Test
+    fun `map is frozen only in the completion event`() {
+        begin()
+        body()
+        val map = JsonObject().apply { addProperty("version", 1) }
+        capture.progress(stamp(15), false, "tracking", JsonObject(), map = map)
+        assertFalse(body().has("map"))
+        capture.progress(stamp(16), false, "completed", JsonObject(), complete = true, map = map)
+        map.addProperty("version", 2)
+        assertEquals(1, body()["map"].asJsonObject["version"].asInt)
+        progress(20)
+        assertNull(capture.poll())
+    }
+
     private fun stamp(seconds: Long) = TimerStamp(seconds * 20, seconds * 1_000_000_000)
 
     private fun body() = JsonParser.parseString(assertNotNull(capture.poll()).body).asJsonObject

@@ -120,6 +120,14 @@ session families, and account deletion revokes both.
 
 ## Qualifying PBs
 
+For map capture, test with Noamm absent and room timers disabled. In an F7/M7
+solo run, visit multi-tile rooms, collect some/all secrets and reach 300 score.
+Compare the website snapshot with the in-game map at that instant, including
+unvisited zero counts, doors, failed puzzles and secret totals. Continue collecting
+after 300 to verify the stored map is frozen. Beat that PB and verify the old map
+is retired; old-client PBs without maps must still work. The offline map/transport
+tests exercise synthetic pixels and bounded data, not actual Hypixel packets.
+
 New soloclear PBs need a live backend start, five-second progress acknowledgements
 and a qualifying finish. Check F7/M7, delayed rosters, another player joining then
 leaving, death, Paul changes, disconnects and server restart. Local PBs must survive
