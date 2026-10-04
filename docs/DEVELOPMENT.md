@@ -196,6 +196,23 @@ and does not require or communicate with Noamm or another dungeon mod.
 The website retains only the current best map per player/floor and the Discord
 time links to it. Older PBs without map data remain valid.
 
+Map version 2 also captures time spent in each room, including repeat visits,
+and dungeon secrets collected/total plus crypts killed. Timing starts with the
+solo PB and freezes at the same 300-score observation. Both elapsed milliseconds
+and server ticks are partitioned exactly between rooms and transit/unmapped time;
+internal joins of a multi-tile room count toward that room. The website displays
+ticks to match the PB. Dungeon secret totals sum distinct rooms only when all
+totals are known; missing observations remain null. No post-300 activity is added.
+
+The map can include a lightweight 2D replay: player X/Z and facing sampled at
+five Hz, plus the observed dungeon-wide secret counter. A fixed 432,024-byte
+buffer bounds recording to two hours; the final sample uses the exact PB cutoff.
+The sync worker encodes the detached bytes, and the backend compresses them with
+the map. Teleports, large jumps, missing positions and gaps break interpolation.
+Secret indicators approximate the receipt of counter updates, not exact pickup
+locations or times. Replays share current-best-only map retention. There is no
+world, mob or image recording, and no replay stream during the run.
+
 Settings, per-account PBs and run history live under `config/mithrilpf/`.
 Malformed/newer settings are not overwritten; unknown fields survive edits.
 PB files discourage casual manual edits but are not tamper-proof. Back up this

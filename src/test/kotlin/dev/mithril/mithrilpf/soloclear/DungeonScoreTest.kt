@@ -5,6 +5,20 @@ import kotlin.test.*
 
 class DungeonScoreTest {
     @Test
+    fun `run summary reads integer secret count separately from percentage and retains crypts`() {
+        val score = DungeonScore()
+        assertNull(score.secretsFound)
+        assertNull(score.crypts)
+        score.tab(listOf("Secrets Found: 75.0%", "Secrets Found: 42", "Crypts: 7"))
+        assertEquals(42, score.secretsFound)
+        assertEquals(7, score.crypts)
+        assertEquals(75.0, score.evidence(false)["secrets"].asDouble)
+        score.tab(listOf("Secrets Found: 99999", "Secrets Found: nonsense", "Crypts: 101"))
+        assertEquals(42, score.secretsFound)
+        assertEquals(7, score.crypts)
+    }
+
+    @Test
     fun `backend score and serialized evidence share the same vectors`() {
         val cases =
             JsonParser.parseString(

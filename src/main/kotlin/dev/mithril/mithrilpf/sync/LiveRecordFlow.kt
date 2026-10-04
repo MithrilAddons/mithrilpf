@@ -2,9 +2,16 @@ package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
 
 /** Immutable client-thread observations; no Minecraft objects cross into the worker. */
-data class RecordEvent(val run: Long, val path: String, val body: String, val capturedNanos: Long)
+data class RecordEvent(
+    val run: Long,
+    val path: String,
+    val body: String,
+    val capturedNanos: Long,
+    val replay: ReplaySnapshot? = null,
+)
 
 /** A failed live exchange is final for that attempt. Local PB storage is independent. */
 class LiveRecordFlow(
@@ -38,6 +45,7 @@ class LiveRecordFlow(
             body.addProperty("sequence", sequence + 1)
         }
         try {
+            event.replay?.let { body.getAsJsonObject("map")?.add("replay", it.encode()) }
             val response = JsonParser.parseString(post(event.path, body, credential)).asJsonObject
             require(response["version"]?.asInt == 2)
             val status = response["status"]?.asString

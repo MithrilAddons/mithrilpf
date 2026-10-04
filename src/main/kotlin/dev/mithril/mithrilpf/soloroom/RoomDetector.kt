@@ -14,6 +14,7 @@ import net.minecraft.world.level.saveddata.maps.MapId
 /** Client-thread only. Maximum two loaded 129-block columns per tick; no network lookup. */
 class RoomDetector {
     private val runMap = RunMapCapture()
+    val replay = RunReplay()
     private val rooms = arrayOfNulls<SoloRoomDefinition>(36)
     private val retry = IntArray(36)
     private val tokens = IdentityHashMap<Block, Int>()
@@ -32,6 +33,7 @@ class RoomDetector {
         result: (String, Map<String, SplitTime>) -> Unit,
     ) {
         val player = client.player ?: return
+        if (captureSolo) runMap.times.observe(now, player.x, player.z)
         val tile = SoloRoomMap.tile(player.x, player.z)
         if (
             !RunMapCapture.canTrack(
@@ -90,10 +92,29 @@ class RoomDetector {
         runMap.observeSecrets(SoloRoomMap.tile(player.x, player.z), text)
     }
 
-    fun snapshot(client: Minecraft): com.google.gson.JsonObject? {
+    fun beginRun(client: Minecraft, now: TimerStamp) {
+        val player = client.player ?: return
+        runMap.times.begin(now, player.x, player.z)
+        replay.begin(now, player.x, player.z, player.yRot)
+    }
+
+    fun replaySample(client: Minecraft, now: TimerStamp, collected: Int?, finish: Boolean = false) {
+        val player = client.player ?: return
+        replay.observe(now, player.x, player.z, player.yRot, collected, finish)
+    }
+
+    fun snapshot(
+        client: Minecraft,
+        now: TimerStamp,
+        secretsFound: Int?,
+        crypts: Int?,
+    ): CapturedMap? {
         val id = client.player?.inventory?.getItem(8)?.get(DataComponents.MAP_ID) ?: mapId
         val colors = id?.let { client.level?.getMapData(it)?.colors }
-        return runMap.snapshot(calibration, colors, rooms.toList())
+        val recorded = replay.freeze()
+        return runMap
+            .snapshot(calibration, colors, rooms.toList(), now, secretsFound, crypts)
+            ?.let { CapturedMap(it, recorded) }
     }
 
     private fun identify(client: Minecraft, tile: Int) {

@@ -139,7 +139,7 @@ object LinkTransport {
     }
 
     internal fun validateBody(path: String, body: JsonObject?) {
-        val maximum = if (path == "records/solo-progress") 32768 else 4096
+        val maximum = if (path == "records/solo-progress") 640 * 1024 else 4096
         require(body == null || body.toString().toByteArray(Charsets.UTF_8).size <= maximum)
     }
 
