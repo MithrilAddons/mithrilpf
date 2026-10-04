@@ -45,7 +45,8 @@ def main():
     results = checks(Path("release-reports"), Path(f"release/mithrilpf-{version}.jar"),
                      version, os.environ["GITHUB_RUN_ID"])
     notes = Path(f"docs/releases/{version}.md").read_text(encoding="utf-8")
-    Path("release/notes.md").write_text(render(notes, results), encoding="utf-8")
+    with Path("release/notes.md").open("w", encoding="utf-8") as output:
+        output.write(render(notes, results))
 
 
 if __name__ == "__main__":
