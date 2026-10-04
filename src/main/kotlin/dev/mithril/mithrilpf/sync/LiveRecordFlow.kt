@@ -8,6 +8,8 @@ import java.io.IOException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeoutException
 
+private const val SOLO_PROGRESS = "solo-progress"
+
 /** Immutable client-thread observations; no Minecraft objects cross into the worker. */
 data class RecordEvent(
     val run: Long,
@@ -30,7 +32,7 @@ class LiveRecordFlow(
     private var sequence = 0
 
     fun accepts(event: RecordEvent): Boolean =
-        event.path != "solo-progress" || (run == event.run && attempt != null)
+        event.path != SOLO_PROGRESS || (run == event.run && attempt != null)
 
     fun send(event: RecordEvent, credential: String): String {
         val body = JsonParser.parseString(event.body).asJsonObject
@@ -40,7 +42,7 @@ class LiveRecordFlow(
             val age = (clock() - event.capturedNanos) / 1_000_000
             if (age !in 0..10000) return "local_only"
             body.addProperty("elapsed_ms", body["elapsed_ms"].asLong + age)
-        } else if (event.path == "solo-progress") {
+        } else if (event.path == SOLO_PROGRESS) {
             if (run != event.run || attempt == null) return "local_only"
             if (clock() - event.capturedNanos > 5_000_000_000L) {
                 clear()
@@ -82,7 +84,7 @@ class LiveRecordFlow(
                 // Two-second requests leave room for brief retries within the five-second sample
                 // age.
                 if (
-                    event.path != "solo-progress" ||
+                    event.path != SOLO_PROGRESS ||
                         retries >= 2 ||
                         clock() - event.capturedNanos > 3_000_000_000L ||
                         !transient(error)

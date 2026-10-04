@@ -24,6 +24,7 @@ class ReleaseNotesTest(unittest.TestCase):
         self.jar = self.root / "release/mithrilpf-1.2.3.jar"
         self.jar.parent.mkdir()
         self.jar.write_bytes(b"synthetic artifact")
+        (self.root / "gradle.properties").write_text("mod_version=1.2.3\n")
 
     def test_render_reads_actual_reports_and_binds_artifact(self):
         value = checks(self.reports, self.jar, "1.2.3", "123")
@@ -64,6 +65,9 @@ class ReleaseNotesTest(unittest.TestCase):
             os.chdir(self.root)
             with patch.dict(os.environ, RELEASE_TAG="v1.2.3", GITHUB_RUN_ID="123"):
                 main()
+            with patch.dict(os.environ, RELEASE_TAG="v../../private", GITHUB_RUN_ID="123"):
+                with self.assertRaises(ValueError):
+                    main()
         finally:
             os.chdir(previous)
         self.assertIn("mithrilpf-checks:", (self.root / "release/notes.md").read_text())

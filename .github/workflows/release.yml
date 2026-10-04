@@ -49,7 +49,7 @@ jobs:
           artifact="mithrilpf-${version}.jar"
           test -f "release/$artifact"
           (cd release && sha256sum "$artifact" > SHA256SUMS)
-          python tools/release_notes.py
+          python -m tools.release_notes
           notes="release/notes.md"
           args=(--draft --verify-tag --notes-file "$notes" --title "MithrilPF $version")
           if [[ "$version" == *-* ]]; then args+=(--prerelease); fi

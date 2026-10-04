@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from tools.versioning import read_version, validate_tag
+
 
 def checks(reports, jar, version, run_id):
     suites = list((reports / "test-results/test").glob("TEST-*.xml"))
@@ -20,14 +22,14 @@ def checks(reports, jar, version, run_id):
     if tests <= 0:
         raise ValueError("No passing tests")
     report = ET.parse(reports / "reports/jacoco/test/jacocoTestReport.xml").getroot()
-    value = dict(version=1, mod_version=version, run_id=int(run_id), tests=tests,
-                 sha256=hashlib.sha256(jar.read_bytes()).hexdigest())
+    value = {"version": 1, "mod_version": version, "run_id": int(run_id), "tests": tests,
+             "sha256": hashlib.sha256(jar.read_bytes()).hexdigest()}
     for kind in ("LINE", "BRANCH"):
         counter = report.find(f"counter[@type='{kind}']")
         covered, missed = int(counter.attrib["covered"]), int(counter.attrib["missed"])
         if covered < 0 or missed < 0 or covered + missed == 0:
             raise ValueError("Invalid coverage counters")
-        value[kind.lower()] = dict(covered=covered, total=covered + missed)
+        value[kind.lower()] = {"covered": covered, "total": covered + missed}
     return value
 
 
@@ -38,7 +40,8 @@ def render(notes, results):
 
 
 def main():
-    version = os.environ["RELEASE_TAG"].removeprefix("v")
+    version = read_version(Path("gradle.properties").read_text(encoding="utf-8"))
+    validate_tag(version, os.environ["RELEASE_TAG"])
     results = checks(Path("release-reports"), Path(f"release/mithrilpf-{version}.jar"),
                      version, os.environ["GITHUB_RUN_ID"])
     notes = Path(f"docs/releases/{version}.md").read_text(encoding="utf-8")
