@@ -17,6 +17,7 @@ class RunReplay {
     private var lastFlags = 3
     private var secrets = 0
     private var broken = true
+    private var roomSecrets = RunRoomSecrets()
 
     fun begin(now: TimerStamp, x: Double, z: Double, yaw: Float) {
         buffer = ByteBuffer.allocate(MAX_SAMPLES * STRIDE).order(ByteOrder.LITTLE_ENDIAN)
@@ -25,6 +26,7 @@ class RunReplay {
         lastFlags = 3
         secrets = 0
         broken = true
+        roomSecrets = RunRoomSecrets()
         observe(now, x, z, yaw, null)
     }
 
@@ -75,11 +77,24 @@ class RunReplay {
         broken = false
     }
 
-    fun freeze(): ReplaySnapshot? {
+    fun observeRoomSecrets(now: TimerStamp, tile: Int, found: Int, total: Int) {
+        if (buffer == null) return
+        roomSecrets.observe(
+            (now.nanos - requireNotNull(start).nanos) / 1_000_000,
+            tile,
+            found,
+            total,
+        )
+    }
+
+    fun freeze(map: JsonObject? = null): ReplaySnapshot? {
         val captured = buffer ?: return null
         buffer = null
         if (captured.position() < STRIDE * 2) return null
-        return ReplaySnapshot(captured.array().copyOf(captured.position()))
+        return ReplaySnapshot(
+            captured.array().copyOf(captured.position()),
+            map?.let { roomSecrets.freeze(it, lastMillis) },
+        )
     }
 
     companion object {
@@ -89,10 +104,15 @@ class RunReplay {
 }
 
 /** Owns a detached buffer; only the sync worker turns it into the wire representation. */
-class ReplaySnapshot internal constructor(private val bytes: ByteArray) {
+class ReplaySnapshot
+internal constructor(
+    private val bytes: ByteArray,
+    private val roomSecrets: List<RoomSecretEvent>? = null,
+) {
     fun encode() =
         JsonObject().apply {
             addProperty("version", 1)
             addProperty("samples", Base64.getEncoder().encodeToString(bytes))
+            roomSecrets?.let { addProperty("room_secrets", encodeRoomSecrets(it)) }
         }
 }

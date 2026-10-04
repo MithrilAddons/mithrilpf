@@ -334,7 +334,7 @@ object DungeonTimers {
                 if (stopped) return@execute
                 if (RunMapCapture.active(inDungeon, settings.solo, solo)) {
                     if (child is ClientboundPlayerPositionPacket) detector.replay.discontinuity()
-                    actionBar?.let { detector.observeSecrets(client, it) }
+                    actionBar?.let { detector.observeSecrets(client, it, now()) }
                 }
                 team?.let { observeLines(listOf(it)) }
                 if (child is ClientboundPlayerInfoRemovePacket)

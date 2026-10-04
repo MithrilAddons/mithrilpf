@@ -19,13 +19,14 @@ class RunMapCapture {
         visited.add(tile)
     }
 
-    fun observeSecrets(tile: Int?, text: String) {
-        if (tile == null || tile !in 0..35) return
-        val match = secretCounter.find(text) ?: return
+    fun observeSecrets(tile: Int?, text: String): Pair<Int, Int>? {
+        if (tile == null || tile !in 0..35) return null
+        val match = secretCounter.find(text) ?: return null
         val found = match.groupValues[1].toInt()
         val total = match.groupValues[2].toInt()
-        if (total > 100 || found > total) return
+        if (total > 100 || found > total) return null
         secrets[tile] = found to total
+        return secrets[tile]
     }
 
     fun snapshot(
