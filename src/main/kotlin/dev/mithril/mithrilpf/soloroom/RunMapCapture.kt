@@ -5,6 +5,8 @@ import com.google.gson.JsonObject
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 
+data class CapturedMap(val data: JsonObject, val replay: ReplaySnapshot?)
+
 /**
  * Client-thread observations. Only a structured, immutable completion snapshot leaves the client.
  */
@@ -80,22 +82,22 @@ class RunMapCapture {
             add("doors", doors)
             now?.let { times.attach(this, it) }
                 ?.let { stats ->
-                    val captured = rooms.map { it.asJsonObject }
-                    fun sum(field: String): Int? =
-                        if (captured.any { it[field].isJsonNull }) null
-                        else captured.sumOf { it[field].asInt }
-                    val total = sum("secrets_total")
-                    val found = secretsFound ?: sum("secrets_found")
-                    stats.addProperty("secrets_total", total)
-                    stats.addProperty(
-                        "secrets_found",
-                        found?.takeIf { total == null || it <= total },
-                    )
-                    stats.addProperty("crypts", crypts)
+                    addTotals(rooms, stats, secretsFound, crypts)
                     add("stats", stats)
                     addProperty("version", 2)
                 }
         }
+    }
+
+    private fun addTotals(rooms: JsonArray, stats: JsonObject, secretsFound: Int?, crypts: Int?) {
+        val captured = rooms.map { it.asJsonObject }
+        fun sum(field: String): Int? =
+            if (captured.any { it[field].isJsonNull }) null else captured.sumOf { it[field].asInt }
+        val total = sum("secrets_total")
+        val found = secretsFound ?: sum("secrets_found")
+        stats.addProperty("secrets_total", total)
+        stats.addProperty("secrets_found", found?.takeIf { total == null || it <= total })
+        stats.addProperty("crypts", crypts)
     }
 
     private fun room(

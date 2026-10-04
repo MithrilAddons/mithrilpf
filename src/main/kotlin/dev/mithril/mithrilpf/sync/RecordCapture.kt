@@ -7,6 +7,7 @@ import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
+import dev.mithril.mithrilpf.soloroom.CapturedMap
 import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
 import java.util.Locale
@@ -67,8 +68,7 @@ class RecordCapture {
         score: DungeonScore,
         timer: DungeonTimerState?,
         complete: Boolean = false,
-        map: JsonObject? = null,
-        replay: ReplaySnapshot? = null,
+        map: CapturedMap? = null,
     ) {
         if (!solo || (!complete && stamp.nanos < nextSample)) return
         progress(
@@ -77,8 +77,8 @@ class RecordCapture {
             state?.status,
             score.evidence(timer?.completed?.containsKey("Boss Entry") == true),
             complete,
-            map,
-            replay,
+            map?.data,
+            map?.replay,
         )
     }
 

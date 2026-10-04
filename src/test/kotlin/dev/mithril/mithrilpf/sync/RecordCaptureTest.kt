@@ -7,6 +7,7 @@ import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
+import dev.mithril.mithrilpf.soloroom.CapturedMap
 import dev.mithril.mithrilpf.soloroom.RunReplay
 import java.util.UUID
 import kotlin.test.*
@@ -25,14 +26,14 @@ class RecordCaptureTest {
         val map = JsonObject().apply { addProperty("version", 2) }
         capture.progress(stamp(15), false, "tracking", JsonObject(), map = map, replay = replay)
         assertNull(assertNotNull(capture.poll()).replay)
-        capture.progress(
+        capture.sample(
             stamp(16),
             false,
-            "completed",
-            JsonObject(),
+            null,
+            DungeonScore(),
+            null,
             complete = true,
-            map = map,
-            replay = replay,
+            map = CapturedMap(map, replay),
         )
         val event = assertNotNull(capture.poll())
         assertSame(replay, event.replay)

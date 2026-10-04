@@ -279,7 +279,6 @@ object DungeonTimers {
                         state,
                         complete = true,
                         map = detector.snapshot(client, stamp, score.secretsFound, score.crypts),
-                        replay = detector.replay.freeze(),
                     )
                     record("solo", mapOf("300 Score" to time))
                 }

@@ -108,10 +108,13 @@ class RoomDetector {
         now: TimerStamp,
         secretsFound: Int?,
         crypts: Int?,
-    ): com.google.gson.JsonObject? {
+    ): CapturedMap? {
         val id = client.player?.inventory?.getItem(8)?.get(DataComponents.MAP_ID) ?: mapId
         val colors = id?.let { client.level?.getMapData(it)?.colors }
-        return runMap.snapshot(calibration, colors, rooms.toList(), now, secretsFound, crypts)
+        val recorded = replay.freeze()
+        return runMap
+            .snapshot(calibration, colors, rooms.toList(), now, secretsFound, crypts)
+            ?.let { CapturedMap(it, recorded) }
     }
 
     private fun identify(client: Minecraft, tile: Int) {
