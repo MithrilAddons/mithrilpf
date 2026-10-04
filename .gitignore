@@ -26,3 +26,4 @@ config/
 docs/*.md
 !docs/DEVELOPMENT.md
 !docs/TESTING.md
+!docs/RELEASING.md
