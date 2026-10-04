@@ -7,6 +7,7 @@ import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
+import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
 import java.util.Locale
 import java.util.UUID
@@ -67,6 +68,7 @@ class RecordCapture {
         timer: DungeonTimerState?,
         complete: Boolean = false,
         map: JsonObject? = null,
+        replay: ReplaySnapshot? = null,
     ) {
         if (!solo || (!complete && stamp.nanos < nextSample)) return
         progress(
@@ -76,6 +78,7 @@ class RecordCapture {
             score.evidence(timer?.completed?.containsKey("Boss Entry") == true),
             complete,
             map,
+            replay,
         )
     }
 
@@ -111,6 +114,7 @@ class RecordCapture {
         evidence: JsonObject,
         complete: Boolean = false,
         map: JsonObject? = null,
+        replay: ReplaySnapshot? = null,
     ) {
         if (!solo) return
         val elapsed = stamp - requireNotNull(start)
@@ -129,6 +133,7 @@ class RecordCapture {
                 if (complete && map != null) add("map", map.deepCopy())
             },
             stamp,
+            replay.takeIf { complete && map != null },
         )
         if (complete || status !in setOf("tracking", "awaiting_roster")) solo = false
     }
@@ -151,13 +156,18 @@ class RecordCapture {
 
     private fun rosterJson() = JsonArray().apply { roster.sorted().forEach(::add) }
 
-    private fun enqueue(path: String, body: JsonObject, stamp: TimerStamp) {
+    private fun enqueue(
+        path: String,
+        body: JsonObject,
+        stamp: TimerStamp,
+        replay: ReplaySnapshot? = null,
+    ) {
         if (events.size >= 8) {
             events.clear()
             solo = false
             return
         }
         body.addProperty("version", 2)
-        events.addLast(RecordEvent(run, path, body.toString(), stamp.nanos))
+        events.addLast(RecordEvent(run, path, body.toString(), stamp.nanos, replay))
     }
 }

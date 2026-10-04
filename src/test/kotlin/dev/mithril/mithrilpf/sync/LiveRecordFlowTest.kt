@@ -1,9 +1,42 @@
 package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
+import java.util.Base64
 import kotlin.test.*
 
 class LiveRecordFlowTest {
+    @Test
+    fun `sync flow encodes the detached replay with the completion map`() {
+        val expected =
+            JsonParser.parseString(
+                    javaClass.getResource("/contracts/run-replay-v1.json")!!.readText()
+                )
+                .asJsonObject
+        var sent: JsonObject? = null
+        val worker =
+            LiveRecordFlow(
+                { path, body, _ ->
+                    sent = body.deepCopy()
+                    val start = path == "solo-start"
+                    """{"version":2,"status":"${if (start) "active" else "accepted"}","sequence":${if (start) 0 else 1},"attempt_id":"${"a".repeat(43)}","nonce":"${"b".repeat(43)}"}"""
+                },
+                { now },
+            )
+        worker.send(event("solo-start"), "credential")
+        val complete =
+            event("solo-progress", complete = true)
+                .copy(
+                    body = """{"complete":true,"map":{"version":2}}""",
+                    replay =
+                        ReplaySnapshot(Base64.getDecoder().decode(expected["samples"].asString)),
+                )
+        assertEquals("synced", worker.send(complete, "credential"))
+        assertEquals(expected, assertNotNull(sent)["map"].asJsonObject["replay"])
+        assertFalse(complete.body.contains("samples"))
+    }
+
     private val id = "a".repeat(43)
     private var now = 1_000_000_000L
     private val calls = mutableListOf<String>()

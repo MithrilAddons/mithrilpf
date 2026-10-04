@@ -128,6 +128,20 @@ after 300 to verify the stored map is frozen. Beat that PB and verify the old ma
 is retired; old-client PBs without maps must still work. The offline map/transport
 tests exercise synthetic pixels and bounded data, not actual Hypixel packets.
 
+For timed maps, revisit rooms and cross both internal joins and doors between
+rooms. Compare room times plus transit/unmapped with the PB in both clocks,
+including during server lag. Verify dungeon secrets collected/total and crypts
+at 300 score; later movement and pickups must not change the snapshot. Confirm
+old map pages show unrecorded timing rather than zero. The shared run-map-v2.json
+fixture checks the client snapshot against the backend/frontend contract.
+
+For replay, compare position/facing and secret-counter increases with gameplay,
+including Etherwarp/AOTE teleports, missing-map positions and pauses. Verify
+play/pause, scrubbing and the exact 300-score cutoff on the website; later activity
+must not appear. Counter indicators may be delayed or grouped. Measure frame times
+in Minecraft with recording active; unit tests verify cadence, buffer bounds and
+encoding but do not establish live-game overhead or packet ordering.
+
 New soloclear PBs need a live backend start, five-second progress acknowledgements
 and a qualifying finish. Check F7/M7, delayed rosters, another player joining then
 leaving, death, Paul changes, disconnects and server restart. Local PBs must survive

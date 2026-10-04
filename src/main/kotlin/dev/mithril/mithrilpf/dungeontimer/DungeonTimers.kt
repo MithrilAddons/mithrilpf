@@ -234,6 +234,7 @@ object DungeonTimers {
         if (box?.contains(player.position()) == true)
             state?.let { record("splits", it.enterBoss(stamp)) }
         val captureSolo = RunMapCapture.active(inDungeon, settings.solo, solo)
+        if (captureSolo) detector.replaySample(client, stamp, score.secretsFound)
         if ((settings.rooms || captureSolo) && !ghost) {
             try {
                 floor?.let {
@@ -269,6 +270,7 @@ object DungeonTimers {
                     stamp,
                 )
                 ?.let { time ->
+                    detector.replaySample(client, stamp, score.secretsFound, finish = true)
                     recordCapture.sample(
                         stamp,
                         ghost,
@@ -276,7 +278,8 @@ object DungeonTimers {
                         score,
                         state,
                         complete = true,
-                        map = detector.snapshot(client),
+                        map = detector.snapshot(client, stamp, score.secretsFound, score.crypts),
+                        replay = detector.replay.freeze(),
                     )
                     record("solo", mapOf("300 Score" to time))
                 }
@@ -295,6 +298,7 @@ object DungeonTimers {
                     child !is ClientboundPlayerInfoUpdatePacket &&
                     child !is ClientboundPlayerInfoRemovePacket &&
                     child !is ClientboundMapItemDataPacket &&
+                    child !is ClientboundPlayerPositionPacket &&
                     child !is ClientboundEntityEventPacket
             )
                 return@visitDungeonPackets
@@ -330,6 +334,7 @@ object DungeonTimers {
                 if (child is ClientboundPingPacket && clock.accept(child.id, bundled)) ticks++
                 if (stopped) return@execute
                 if (RunMapCapture.active(inDungeon, settings.solo, solo)) {
+                    if (child is ClientboundPlayerPositionPacket) detector.replay.discontinuity()
                     actionBar?.let { detector.observeSecrets(client, it) }
                 }
                 team?.let { observeLines(listOf(it)) }
@@ -393,6 +398,7 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
+            if (solo?.active == true) detector.beginRun(client, stamp)
             observeRecordRoster(client)
             recordCapture.begin(
                 floor,

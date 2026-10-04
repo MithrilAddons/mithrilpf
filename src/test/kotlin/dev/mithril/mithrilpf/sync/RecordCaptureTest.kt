@@ -7,11 +7,48 @@ import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
+import dev.mithril.mithrilpf.soloroom.RunReplay
 import java.util.UUID
 import kotlin.test.*
 
 class RecordCaptureTest {
     private val capture = RecordCapture()
+
+    @Test
+    fun `replay is detached from JSON and only queued with a completed map`() {
+        val recorder = RunReplay()
+        recorder.begin(stamp(10), -185.0, -185.0, 0f)
+        recorder.observe(stamp(16), -185.0, -185.0, 0f, 1, finish = true)
+        val replay = assertNotNull(recorder.freeze())
+        begin()
+        body()
+        val map = JsonObject().apply { addProperty("version", 2) }
+        capture.progress(stamp(15), false, "tracking", JsonObject(), map = map, replay = replay)
+        assertNull(assertNotNull(capture.poll()).replay)
+        capture.progress(
+            stamp(16),
+            false,
+            "completed",
+            JsonObject(),
+            complete = true,
+            map = map,
+            replay = replay,
+        )
+        val event = assertNotNull(capture.poll())
+        assertSame(replay, event.replay)
+        assertFalse(event.body.contains("samples"))
+        begin()
+        body()
+        capture.progress(
+            stamp(16),
+            false,
+            "completed",
+            JsonObject(),
+            complete = true,
+            replay = replay,
+        )
+        assertNull(assertNotNull(capture.poll()).replay)
+    }
 
     @Test
     fun `map is frozen only in the completion event`() {

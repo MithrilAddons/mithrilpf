@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.soloroom
 
+import com.google.gson.JsonParser
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import kotlin.test.*
@@ -55,6 +56,56 @@ class RunMapCaptureTest {
     private fun snapshot() = assertNotNull(capture.snapshot(map, colors, definitions))
 
     private fun first() = snapshot()["rooms"].asJsonArray[0].asJsonObject
+
+    @Test
+    fun `timed completion matches shared web contract and stays frozen`() {
+        room(0)
+        room(1)
+        room(7, center = 30, type = 66, total = 0)
+        definitions[0] = SoloRoomDefinition("Room", "NORMAL", emptyList(), 5)
+        definitions[1] = definitions[0]
+        definitions[7] = SoloRoomDefinition("Puzzle", "PUZZLE", emptyList(), 0)
+        pixel(23, 13, 63)
+        pixel(23, 9, 63)
+        pixel(33, 23, 63)
+        capture.observeSecrets(0, "3/5 Secrets")
+        capture.times.begin(TimerStamp(200, 10_000_000_000), -185.0, -185.0)
+        capture.times.observe(TimerStamp(320, 16_000_000_000), -153.0, -153.0)
+        capture.times.observe(TimerStamp(480, 24_000_000_000), -169.0, -153.0)
+        val result =
+            capture.snapshot(map, colors, definitions, TimerStamp(500, 25_000_000_000), 3, 5)
+        val expected =
+            JsonParser.parseString(javaClass.getResource("/contracts/run-map-v2.json")!!.readText())
+        assertEquals(expected, result)
+        capture.observeSecrets(0, "5/5 Secrets")
+        capture.times.observe(TimerStamp(600, 30_000_000_000), 100.0, 100.0)
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun `summary counts preserve missing observations and count each merged room once`() {
+        room(0)
+        room(1)
+        pixel(23, 13, 63)
+        pixel(23, 9, 63)
+        capture.times.begin(TimerStamp(0, 0), -185.0, -185.0)
+        capture.observeSecrets(1, "4/5 Secrets")
+        fun stats(found: Int? = null) =
+            capture
+                .snapshot(map, colors, definitions, TimerStamp(20, 1_000_000_000), found, null)!![
+                    "stats"]
+                .asJsonObject
+        assertEquals(5, stats()["secrets_total"].asInt)
+        assertEquals(4, stats()["secrets_found"].asInt)
+        assertTrue(stats()["crypts"].isJsonNull)
+        assertTrue(stats(6)["secrets_found"].isJsonNull)
+        room(2)
+        definitions[2] = null
+        capture.visit(2)
+        assertTrue(stats()["secrets_total"].isJsonNull)
+        assertTrue(stats()["secrets_found"].isJsonNull)
+        assertEquals(6, stats(6)["secrets_found"].asInt)
+    }
 
     @Test
     fun `unvisited rooms start at zero and observations persist across room changes`() {

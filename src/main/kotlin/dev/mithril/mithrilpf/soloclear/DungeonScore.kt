@@ -11,7 +11,12 @@ class DungeonScore {
     private var completed: Int? = null
     private var cleared: Int? = null
     private var secrets: Double? = null
-    private var crypts: Int? = null
+    var crypts: Int? = null
+        private set
+
+    var secretsFound: Int? = null
+        private set
+
     private var puzzles: Int? = null
     private var solved = 0
     private var bloodIncluded = false
@@ -35,6 +40,7 @@ class DungeonScore {
                 if (it.isFinite() && it in 0.0..100.0) secrets = it
             }
             integer(CRYPTS, line)?.let { if (it in 0..100) crypts = it }
+            integer(SECRET_COUNT, line)?.let { if (it in 0..3600) secretsFound = it }
             integer(DEATHS, line)?.let { if (it in 0..100) deaths = maxOf(deaths ?: 0, it) }
             integer(PUZZLES, line)?.let { if (it in 0..10) puzzles = it }
         }
@@ -125,6 +131,7 @@ class DungeonScore {
     companion object {
         private val COMPLETED = Regex("Completed Rooms: (\\d+)")
         private val SECRETS = Regex("Secrets Found: ([\\d.]+)%")
+        private val SECRET_COUNT = Regex("Secrets Found: (\\d+)")
         private val CRYPTS = Regex("Crypts: (\\d+)")
         private val DEATHS = Regex("Deaths: \\(?([0-9]+)\\)?")
         private val PUZZLES = Regex("Puzzles: \\((\\d+)\\)")

@@ -2,12 +2,14 @@ package dev.mithril.mithrilpf.soloroom
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 
 /**
  * Client-thread observations. Only a structured, immutable completion snapshot leaves the client.
  */
 class RunMapCapture {
+    val times = RunRoomTimes()
     private val secrets = arrayOfNulls<Pair<Int, Int>>(36)
     private val visited = mutableSetOf<Int>()
 
@@ -28,6 +30,9 @@ class RunMapCapture {
         map: SoloRoomMap?,
         colors: ByteArray?,
         definitions: List<SoloRoomDefinition?>,
+        now: TimerStamp? = null,
+        secretsFound: Int? = null,
+        crypts: Int? = null,
     ): JsonObject? {
         if (map == null || colors?.size != 16384 || definitions.size != 36) return null
         val grid = MapGrid(map, colors)
@@ -73,6 +78,23 @@ class RunMapCapture {
             addProperty("version", 1)
             add("rooms", rooms)
             add("doors", doors)
+            now?.let { times.attach(this, it) }
+                ?.let { stats ->
+                    val captured = rooms.map { it.asJsonObject }
+                    fun sum(field: String): Int? =
+                        if (captured.any { it[field].isJsonNull }) null
+                        else captured.sumOf { it[field].asInt }
+                    val total = sum("secrets_total")
+                    val found = secretsFound ?: sum("secrets_found")
+                    stats.addProperty("secrets_total", total)
+                    stats.addProperty(
+                        "secrets_found",
+                        found?.takeIf { total == null || it <= total },
+                    )
+                    stats.addProperty("crypts", crypts)
+                    add("stats", stats)
+                    addProperty("version", 2)
+                }
         }
     }
 
