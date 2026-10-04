@@ -225,6 +225,7 @@ object DungeonTimers {
         if (++scanTicks % 10 == 0) detect(client)
         if (!inDungeon || stopped) return
         val player = client.player ?: return
+        if (scanTicks % 10 == 0) observeRecordRoster(client)
         if (rooms == null) rooms = SoloRoomState(player.gameProfile.name)
         if (solo == null) solo = SoloClearState(player.gameProfile.name)
         val stamp = now()
@@ -337,7 +338,7 @@ object DungeonTimers {
                     entries.forEach { (id, text) ->
                         if (text == null) tab.remove(id) else tab[id] = text
                     }
-                    recordCapture.observeTab(tab)
+                    observeRecordRoster(client)
                     val participants = tab.values.mapNotNull(SoloRoomState::participant)
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
@@ -391,7 +392,7 @@ object DungeonTimers {
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
-            recordCapture.observeTab(tab)
+            observeRecordRoster(client)
             recordCapture.begin(
                 floor,
                 stamp,
@@ -436,6 +437,14 @@ object DungeonTimers {
             ghost = true
             solo?.invalidate("death")
         }
+    }
+
+    private fun observeRecordRoster(client: Minecraft) {
+        recordCapture.observeTab(
+            tab.values,
+            client.connection?.onlinePlayers.orEmpty().map { it.profile.name to it.profile.id } +
+                (client.user.name to client.user.profileId),
+        )
     }
 
     private fun record(kind: String, times: Map<String, SplitTime>) {

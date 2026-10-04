@@ -39,9 +39,10 @@ class RecordCaptureTest {
 
     @Test
     fun `tab capture filters nonparticipants and snapshots score only when a sample is due`() {
-        val self = UUID.fromString("01234567-89ab-cdef-0123-456789abcdef")
-        val other = UUID.fromString("11234567-89ab-cdef-0123-456789abcdef")
-        capture.observeTab(mapOf(self to "[30] Player (Mage XX)", other to "Secrets Found: 20%"))
+        val self = UUID.fromString("01234567-89ab-4def-8123-456789abcdef")
+        val fake = UUID.fromString("11234567-89ab-2def-8123-456789abcdef")
+        val tab = mapOf(fake to "[30] Player (Mage XX)", UUID.randomUUID() to "Secrets Found: 20%")
+        capture.observeTab(tab.values, listOf("Player" to fake, "Player" to self))
         val state = SoloClearState("Player")
         state.begin("F7", stamp(10))
         val score = DungeonScore()
@@ -66,6 +67,77 @@ class RecordCaptureTest {
         val end = body()
         assertTrue(end["evidence"].asJsonObject["in_boss"].asBoolean)
         assertFalse(end["valid"].asBoolean)
+    }
+
+    @Test
+    fun `unresolved teammate cannot disappear from a solo roster`() {
+        val self = UUID.randomUUID()
+        val teammate = UUID.randomUUID()
+        val fake = UUID.fromString("11234567-89ab-2def-8123-456789abcdef")
+        val lines = listOf("[30] Player (Mage XX)", "[30] Teammate (Tank XX)")
+        capture.observeTab(lines, listOf("Player" to self, "Teammate" to fake))
+        begin()
+        body()
+        progress(15)
+        assertTrue(body()["roster"].asJsonArray.isEmpty)
+        capture.observeTab(listOf(lines.first()), listOf("Player" to self))
+        progress(20)
+        assertTrue(body()["roster"].asJsonArray.isEmpty)
+        capture.terminal("M7", SplitTime(40000, 800), stamp(60))
+        assertNull(capture.poll())
+        capture.observeTab(emptyList(), listOf("Teammate" to teammate))
+        progress(25)
+        assertEquals(
+            setOf(self, teammate).map { it.toString().replace("-", "") }.toSet(),
+            body()["roster"].asJsonArray.map { it.asString }.toSet(),
+        )
+    }
+
+    @Test
+    fun `terminal clients agree on real roster despite different display rows and profile order`() {
+        val profiles = (1..5).map { "Player$it" to UUID.randomUUID() }
+        val lines = profiles.map { (name, _) -> "[30] $name (Mage XX)" }
+        val reports =
+            listOf(profiles, profiles.reversed()).map { ordered ->
+                val client = RecordCapture()
+                client.observeTab(
+                    lines.reversed() + "Secrets Found: 100%",
+                    ordered + ("Unrelated" to UUID.randomUUID()),
+                )
+                client.begin("M7", stamp(10), 123456, false, false)
+                client.observeTab(
+                    listOf("[30] PLAYER1 (DEAD)"),
+                    listOf("player1" to profiles.first().second),
+                )
+                client.terminal("M7", SplitTime(40000, 800), stamp(60))
+                JsonParser.parseString(assertNotNull(client.poll()).body)
+                    .asJsonObject["roster"]
+                    .asJsonArray
+                    .map { it.asString }
+            }
+        assertEquals(
+            profiles.map { it.second.toString().replace("-", "") }.sorted(),
+            reports.first(),
+        )
+        assertEquals(reports.first(), reports.last())
+    }
+
+    @Test
+    fun `reset forgets previous participant identities and waits for fresh profiles`() {
+        val self = UUID.randomUUID()
+        val line = "[30] Player (Mage XX)"
+        capture.observeTab(listOf(line, "[30] Teammate (Tank XX)"), listOf("Player" to self))
+        capture.reset()
+        capture.observeTab(listOf(line), emptyList())
+        begin(eligible = false)
+        capture.terminal("M7", SplitTime(40000, 800), stamp(60))
+        assertNull(capture.poll())
+        capture.observeTab(listOf(line), listOf("PLAYER" to self))
+        capture.terminal("M7", SplitTime(40000, 800), stamp(60))
+        assertEquals(
+            listOf(self.toString().replace("-", "")),
+            body()["roster"].asJsonArray.map { it.asString },
+        )
     }
 
     @Test

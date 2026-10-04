@@ -8,12 +8,15 @@ import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import java.util.Locale
 import java.util.UUID
 
 /** Client-thread capture, independent of Minecraft so complete event timelines can be tested. */
 class RecordCapture {
     private val events = ArrayDeque<RecordEvent>()
     private val roster = linkedSetOf<String>()
+    private val participants = linkedSetOf<String>()
+    private val identities = mutableMapOf<String, String>()
     private var start: TimerStamp? = null
     private var run = 0L
     private var startedMillis = 0L
@@ -31,6 +34,8 @@ class RecordCapture {
     fun reset() {
         start = null
         roster.clear()
+        participants.clear()
+        identities.clear()
         solo = false
     }
 
@@ -38,12 +43,20 @@ class RecordCapture {
         roster.addAll(players)
     }
 
-    fun observeTab(tab: Map<UUID, String>) {
-        observeRoster(
-            tab.filterValues { SoloRoomState.participant(it) != null }
-                .keys
-                .map { it.toString().replace("-", "") }
+    fun observeTab(lines: Collection<String>, profiles: Collection<Pair<String, UUID>>) {
+        participants.addAll(
+            lines.mapNotNull(SoloRoomState::participant).map { it.lowercase(Locale.ROOT) }
         )
+        // Dungeon display rows can have synthetic UUIDs. Only resolve names using real profiles.
+        profiles.forEach { (name, id) ->
+            val key = name.lowercase(Locale.ROOT)
+            if (id.version() == 4 && key in participants)
+                identities[key] = id.toString().replace("-", "")
+        }
+        roster.clear()
+        // Never silently drop an unresolved teammate, including one who has already left.
+        if (participants.all { it in identities })
+            observeRoster(participants.map { identities.getValue(it) })
     }
 
     fun sample(
