@@ -3,6 +3,7 @@ package dev.mithril.mithrilpf.dungeontimer
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
+import dev.mithril.mithrilpf.soloroom.RunMapCapture
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
 import dev.mithril.mithrilpf.sync.RecordCapture
@@ -230,7 +231,8 @@ object DungeonTimers {
         val box = floor?.lastOrNull()?.digitToIntOrNull()?.let { bounds.getOrNull(it - 1) }
         if (box?.contains(player.position()) == true)
             state?.let { record("splits", it.enterBoss(stamp)) }
-        if ((settings.rooms || (settings.solo && solo?.active == true)) && !ghost) {
+        val captureSolo = RunMapCapture.active(inDungeon, settings.solo, solo)
+        if ((settings.rooms || captureSolo) && !ghost) {
             try {
                 floor?.let {
                     detector.tick(
@@ -238,7 +240,7 @@ object DungeonTimers {
                         rooms!!,
                         it,
                         stamp,
-                        settings.solo && solo?.active == true,
+                        captureSolo,
                     ) { name, times ->
                         roomResult(name, times)
                     }
@@ -295,13 +297,7 @@ object DungeonTimers {
             )
                 return@visitDungeonPackets
             val received = System.nanoTime()
-            val actionBar =
-                when (child) {
-                    is ClientboundSetActionBarTextPacket -> child.text.string
-                    is ClientboundSystemChatPacket ->
-                        if (child.overlay()) child.content().string else null
-                    else -> null
-                }?.let(DungeonTimerState::clean)
+            val actionBar = dungeonActionBar(child)
             val chat =
                 (child as? ClientboundSystemChatPacket)
                     ?.takeUnless { it.overlay() }
@@ -331,7 +327,7 @@ object DungeonTimers {
                 if (!settings.enabled || !ready) return@execute
                 if (child is ClientboundPingPacket && clock.accept(child.id, bundled)) ticks++
                 if (stopped) return@execute
-                if (inDungeon && settings.solo && solo?.active == true) {
+                if (RunMapCapture.active(inDungeon, settings.solo, solo)) {
                     actionBar?.let { detector.observeSecrets(client, it) }
                 }
                 team?.let { observeLines(listOf(it)) }

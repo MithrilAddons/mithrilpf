@@ -2,6 +2,7 @@ package dev.mithril.mithrilpf.soloroom
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import dev.mithril.mithrilpf.soloclear.SoloClearState
 
 /**
  * Client-thread observations. Only a structured, immutable completion snapshot leaves the client.
@@ -17,9 +18,9 @@ class RunMapCapture {
     fun observeSecrets(tile: Int?, text: String) {
         if (tile == null || tile !in 0..35) return
         val match = secretCounter.find(text) ?: return
-        val found = match.groupValues[1].toIntOrNull() ?: return
-        val total = match.groupValues[2].toIntOrNull() ?: return
-        if (total !in 0..100 || found !in 0..total) return
+        val found = match.groupValues[1].toInt()
+        val total = match.groupValues[2].toInt()
+        if (total > 100 || found > total) return
         secrets[tile] = found to total
     }
 
@@ -111,6 +112,17 @@ class RunMapCapture {
     }
 
     companion object {
+        fun active(inDungeon: Boolean, enabled: Boolean, solo: SoloClearState?) =
+            inDungeon && enabled && solo?.active == true
+
+        fun canTrack(
+            eligible: Boolean,
+            captureSolo: Boolean,
+            tile: Int?,
+            dead: Boolean,
+            spectator: Boolean,
+        ) = (eligible || captureSolo) && tile != null && !dead && !spectator
+
         private val secretCounter =
             Regex(
                 "(?<!\\d)(\\d{1,3})\\s*/\\s*(\\d{1,3})\\s+Secrets?\\b",

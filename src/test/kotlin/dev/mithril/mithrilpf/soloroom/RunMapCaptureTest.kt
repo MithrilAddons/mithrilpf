@@ -1,8 +1,40 @@
 package dev.mithril.mithrilpf.soloroom
 
+import dev.mithril.mithrilpf.dungeontimer.TimerStamp
+import dev.mithril.mithrilpf.soloclear.SoloClearState
 import kotlin.test.*
 
 class RunMapCaptureTest {
+    @Test
+    fun `map collection follows solo eligibility through start completion and invalidation`() {
+        val solo = SoloClearState("Tester")
+        assertFalse(RunMapCapture.active(true, true, null))
+        assertFalse(RunMapCapture.active(true, true, solo))
+        solo.begin("F7", TimerStamp(0, 0))
+        assertTrue(RunMapCapture.active(true, true, solo))
+        assertFalse(RunMapCapture.active(false, true, solo))
+        assertFalse(RunMapCapture.active(true, false, solo))
+        solo.roster(listOf("Tester"))
+        solo.observe(0, false, TimerStamp(1, 50_000_000))
+        assertTrue(RunMapCapture.active(true, true, solo))
+        assertNotNull(solo.observe(300, false, TimerStamp(200, 10_000_000_000)))
+        assertFalse(RunMapCapture.active(true, true, solo))
+        val invalid = SoloClearState("Tester")
+        invalid.begin("M7", TimerStamp(0, 0))
+        invalid.roster(listOf("Tester", "Other"))
+        assertFalse(RunMapCapture.active(true, true, invalid))
+    }
+
+    @Test
+    fun `solo map tracking survives disabled room timers but rejects spectators deaths and missing tiles`() {
+        assertTrue(RunMapCapture.canTrack(false, true, 0, false, false))
+        assertTrue(RunMapCapture.canTrack(true, false, 35, false, false))
+        assertFalse(RunMapCapture.canTrack(false, false, 0, false, false))
+        assertFalse(RunMapCapture.canTrack(true, true, null, false, false))
+        assertFalse(RunMapCapture.canTrack(true, true, 0, true, false))
+        assertFalse(RunMapCapture.canTrack(true, true, 0, false, true))
+    }
+
     private val capture = RunMapCapture()
     private val map = SoloRoomMap(5, 5, 16)
     private val colors = ByteArray(16384)
@@ -114,13 +146,53 @@ class RunMapCaptureTest {
     }
 
     @Test
+    fun `door types and entrance completion markers retain map semantics`() {
+        room(0, center = 30, type = 30)
+        definitions[0] = null
+        room(1)
+        for ((color, type) in listOf(18 to "BLOOD", 30 to "ENTRANCE", 63 to "NORMAL")) {
+            pixel(23, 13, color)
+            val data = snapshot()
+            assertEquals(type, data["doors"].asJsonArray.single().asJsonObject["type"].asString)
+            assertEquals("DISCOVERED", data["rooms"].asJsonArray[0].asJsonObject["state"].asString)
+        }
+        pixel(23, 13, 1)
+        assertEquals(0, snapshot()["doors"].asJsonArray.size())
+    }
+
+    @Test
+    fun `a counter supplies secrets when the room name could not be identified`() {
+        room(0)
+        definitions[0] = null
+        capture.observeSecrets(0, "2/5 Secrets")
+        assertEquals(2, first()["secrets_found"].asInt)
+        assertEquals(5, first()["secrets_total"].asInt)
+        assertTrue(first()["name"].isJsonNull)
+        capture.observeSecrets(0, "2/101 Secrets")
+        assertEquals(5, first()["secrets_total"].asInt)
+    }
+
+    @Test
+    fun `edges beyond the map image cannot create room connections`() {
+        room(0)
+        room(1)
+        for ((x, z) in listOf(-30 to 5, 120 to 5, 5 to -30, 5 to 120)) {
+            val data = assertNotNull(capture.snapshot(SoloRoomMap(x, z, 16), colors, definitions))
+            assertEquals(2, data["rooms"].asJsonArray.size())
+            assertEquals(0, data["doors"].asJsonArray.size())
+        }
+    }
+
+    @Test
     fun `invalid capture inputs do not create a map`() {
         assertNull(capture.snapshot(map, colors, definitions))
         assertNull(capture.snapshot(null, colors, definitions))
+        assertNull(capture.snapshot(map, null, definitions))
         assertNull(capture.snapshot(map, ByteArray(8), definitions))
         assertNull(capture.snapshot(map, colors, emptyList()))
         capture.observeSecrets(null, "1/5 Secrets")
         capture.observeSecrets(36, "1/5 Secrets")
+        capture.observeSecrets(-1, "1/5 Secrets")
         for (tile in 0..4) room(tile)
         for (edge in 0..3) {
             pixel(23 + edge * 20, 13, 63)

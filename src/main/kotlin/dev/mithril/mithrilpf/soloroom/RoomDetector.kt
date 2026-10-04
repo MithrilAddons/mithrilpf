@@ -34,14 +34,18 @@ class RoomDetector {
         val player = client.player ?: return
         val tile = SoloRoomMap.tile(player.x, player.z)
         if (
-            (!state.eligible && !captureSolo) ||
-                tile == null ||
-                player.isDeadOrDying ||
-                player.isSpectator
+            !RunMapCapture.canTrack(
+                state.eligible,
+                captureSolo,
+                tile,
+                player.isDeadOrDying,
+                player.isSpectator,
+            )
         ) {
             state.leave(now)
             return
         }
+        requireNotNull(tile)
         ticks++
         if (captureSolo) runMap.visit(tile)
         identify(client, tile)
