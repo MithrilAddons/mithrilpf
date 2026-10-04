@@ -87,9 +87,12 @@ class RoomDetector {
         }
     }
 
-    fun observeSecrets(client: Minecraft, text: String) {
+    fun observeSecrets(client: Minecraft, text: String, now: TimerStamp) {
         val player = client.player ?: return
-        runMap.observeSecrets(SoloRoomMap.tile(player.x, player.z), text)
+        val tile = SoloRoomMap.tile(player.x, player.z) ?: return
+        runMap.observeSecrets(tile, text)?.let { (found, total) ->
+            replay.observeRoomSecrets(now, tile, found, total)
+        }
     }
 
     fun beginRun(client: Minecraft, now: TimerStamp) {
@@ -111,10 +114,9 @@ class RoomDetector {
     ): CapturedMap? {
         val id = client.player?.inventory?.getItem(8)?.get(DataComponents.MAP_ID) ?: mapId
         val colors = id?.let { client.level?.getMapData(it)?.colors }
-        val recorded = replay.freeze()
-        return runMap
-            .snapshot(calibration, colors, rooms.toList(), now, secretsFound, crypts)
-            ?.let { CapturedMap(it, recorded) }
+        val map = runMap.snapshot(calibration, colors, rooms.toList(), now, secretsFound, crypts)
+        val recorded = replay.freeze(map)
+        return map?.let { CapturedMap(it, recorded) }
     }
 
     private fun identify(client: Minecraft, tile: Int) {
