@@ -2,8 +2,12 @@ package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dev.mithril.mithrilpf.account.ServiceFailure
 import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
+import java.io.IOException
 import java.util.Base64
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
 import kotlin.test.*
 
 class LiveRecordFlowTest {
@@ -176,5 +180,112 @@ class LiveRecordFlowTest {
                 .replace("\"attempt_id\":\"$id\"", "\"attempt_id\":\"${"z".repeat(43)}\"")
         assertFails { switched.send(event("solo-progress"), "credential") }
         assertFalse(switched.accepts(event("solo-progress")))
+    }
+
+    @Test
+    fun `transient progress failures retry the exact nonce sequence and completion body`() {
+        for (failure in
+            listOf(
+                IOException(),
+                TimeoutException(),
+                ExecutionException(IOException()),
+                ServiceFailure(502),
+                ServiceFailure(503),
+                ServiceFailure(504),
+            )) {
+            var requests = 0
+            var first: String? = null
+            val retrying =
+                LiveRecordFlow(
+                    { path, body, _ ->
+                        if (path == "solo-start") {
+                            """{"version":2,"status":"active","sequence":0,"attempt_id":"$id","nonce":"$id"}"""
+                        } else {
+                            if (first == null) first = body.toString()
+                            assertEquals(first, body.toString())
+                            requests++
+                            if (requests < 3) throw failure
+                            """{"version":2,"status":"accepted","sequence":1,"attempt_id":"$id","nonce":"$id"}"""
+                        }
+                    },
+                    { now },
+                )
+            retrying.send(event("solo-start"), "credential")
+            assertEquals(
+                "synced",
+                retrying.send(event("solo-progress", complete = true), "credential"),
+            )
+            assertEquals(3, requests)
+            assertFalse(retrying.accepts(event("solo-progress")))
+        }
+    }
+
+    @Test
+    fun `persistent failures stop after bounded retries and never retry a stale timeline`() {
+        for (duration in listOf(0L, 2_000_000_000L, 4_000_000_000L)) {
+            var requests = 0
+            val retrying =
+                LiveRecordFlow(
+                    { path, _, _ ->
+                        if (path == "solo-start")
+                            """{"version":2,"status":"active","sequence":0,"attempt_id":"$id","nonce":"$id"}"""
+                        else {
+                            requests++
+                            now += duration
+                            throw IOException()
+                        }
+                    },
+                    { now },
+                )
+            retrying.send(event("solo-start"), "credential")
+            assertFailsWith<IOException> { retrying.send(event("solo-progress"), "credential") }
+            assertEquals(
+                if (duration == 0L) 3 else if (duration == 2_000_000_000L) 2 else 1,
+                requests,
+            )
+            assertFalse(retrying.accepts(event("solo-progress")))
+        }
+    }
+
+    @Test
+    fun `authentication validation cancellation and non-progress requests are never retried`() {
+        for (failure in
+            listOf(
+                ServiceFailure(401),
+                ServiceFailure(422),
+                IllegalArgumentException(),
+                InterruptedException(),
+                ExecutionException(IllegalStateException()),
+            )) {
+            var requests = 0
+            val retrying =
+                LiveRecordFlow(
+                    { path, _, _ ->
+                        if (path == "solo-start")
+                            """{"version":2,"status":"active","sequence":0,"attempt_id":"$id","nonce":"$id"}"""
+                        else {
+                            requests++
+                            throw failure
+                        }
+                    },
+                    { now },
+                )
+            retrying.send(event("solo-start"), "credential")
+            assertFails { retrying.send(event("solo-progress"), "credential") }
+            assertEquals(1, requests)
+        }
+        for (path in listOf("solo-start", "terminal-report")) {
+            var requests = 0
+            val retrying =
+                LiveRecordFlow(
+                    { _, _, _ ->
+                        requests++
+                        throw IOException()
+                    },
+                    { now },
+                )
+            assertFails { retrying.send(event(path), "credential") }
+            assertEquals(1, requests)
+        }
     }
 }

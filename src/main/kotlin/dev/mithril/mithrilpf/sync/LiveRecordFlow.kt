@@ -2,7 +2,11 @@ package dev.mithril.mithrilpf.sync
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import dev.mithril.mithrilpf.account.ServiceFailure
 import dev.mithril.mithrilpf.soloroom.ReplaySnapshot
+import java.io.IOException
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
 
 /** Immutable client-thread observations; no Minecraft objects cross into the worker. */
 data class RecordEvent(
@@ -13,7 +17,9 @@ data class RecordEvent(
     val replay: ReplaySnapshot? = null,
 )
 
-/** A failed live exchange is final for that attempt. Local PB storage is independent. */
+/**
+ * Brief transport failures may retry the exact progress request; local PB storage is independent.
+ */
 class LiveRecordFlow(
     private val post: (String, JsonObject, String?) -> String,
     private val clock: () -> Long = System::nanoTime,
@@ -46,7 +52,8 @@ class LiveRecordFlow(
         }
         try {
             event.replay?.let { body.getAsJsonObject("map")?.add("replay", it.encode()) }
-            val response = JsonParser.parseString(post(event.path, body, credential)).asJsonObject
+            val response =
+                JsonParser.parseString(postProgress(event, body, credential)).asJsonObject
             require(response["version"]?.asInt == 2)
             val status = response["status"]?.asString
             if (status == "rejected") {
@@ -65,6 +72,35 @@ class LiveRecordFlow(
             throw error
         }
     }
+
+    private fun postProgress(event: RecordEvent, body: JsonObject, credential: String): String {
+        var retries = 0
+        while (true) {
+            try {
+                return post(event.path, body, credential)
+            } catch (error: Exception) {
+                // Two-second requests leave room for brief retries within the five-second sample
+                // age.
+                if (
+                    event.path != "solo-progress" ||
+                        retries >= 2 ||
+                        clock() - event.capturedNanos > 3_000_000_000L ||
+                        !transient(error)
+                )
+                    throw error
+                retries++
+            }
+        }
+    }
+
+    private fun transient(error: Throwable): Boolean =
+        when (error) {
+            is ServiceFailure -> error.statusCode in setOf(502, 503, 504)
+            is IOException,
+            is TimeoutException -> true
+            is ExecutionException -> error.cause?.let(::transient) == true
+            else -> false
+        }
 
     private fun acknowledge(event: RecordEvent, response: JsonObject, status: String) {
         val id = response["attempt_id"].asString
