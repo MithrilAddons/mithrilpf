@@ -9,6 +9,7 @@ import dev.mithril.mithrilpf.soloroom.SoloRoomState
 import dev.mithril.mithrilpf.sync.RecordCapture
 import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
+import dev.mithril.mithrilpf.sync.observePlayers
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.UUID
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -192,6 +193,7 @@ object DungeonTimers {
             )
 
     private fun detect(client: Minecraft) {
+        observeRecordRoster(client)
         val board = client.level?.scoreboard ?: return
         val lines =
             board.playerTeams
@@ -225,7 +227,6 @@ object DungeonTimers {
         if (++scanTicks % 10 == 0) detect(client)
         if (!inDungeon || stopped) return
         val player = client.player ?: return
-        if (scanTicks % 10 == 0) observeRecordRoster(client)
         if (rooms == null) rooms = SoloRoomState(player.gameProfile.name)
         if (solo == null) solo = SoloClearState(player.gameProfile.name)
         val stamp = now()
@@ -439,13 +440,8 @@ object DungeonTimers {
         }
     }
 
-    private fun observeRecordRoster(client: Minecraft) {
-        recordCapture.observeTab(
-            tab.values,
-            client.connection?.onlinePlayers.orEmpty().map { it.profile.name to it.profile.id } +
-                (client.user.name to client.user.profileId),
-        )
-    }
+    private fun observeRecordRoster(client: Minecraft) =
+        recordCapture.observePlayers(tab, client.connection?.onlinePlayers, client.user)
 
     private fun record(kind: String, times: Map<String, SplitTime>) {
         val client = Minecraft.getInstance()
