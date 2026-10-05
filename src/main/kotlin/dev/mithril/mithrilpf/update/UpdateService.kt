@@ -23,6 +23,7 @@ internal data class UpdateEnvironment(
     val origin: Path?,
     val helper: () -> InputStream?,
     val officialRelease: Boolean,
+    val signingKey: ByteArray = UpdateSignature.trustedKey(),
 )
 
 /** Client-thread state; one worker owns files/network. Tests inject delivery and transport. */
@@ -144,6 +145,11 @@ internal class UpdateService(
                     val staged = job.resolve("update.jar")
                     var retain = false
                     try {
+                        UpdateSignature.verify(
+                            release,
+                            fetch(release.signatureUri, UpdateSignature.SIZE),
+                            environment.signingKey,
+                        )
                         val bytes = fetch(release.uri, UpdateCatalog.MAX_JAR)
                         require(bytes.size.toLong() == release.size)
                         Files.write(staged, bytes)

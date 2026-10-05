@@ -35,7 +35,10 @@ data class UpdateRelease(
     val uri: URI,
     val size: Long,
     val sha256: String,
-)
+) {
+    val signatureUri: URI
+        get() = URI("$uri.sig")
+}
 
 object UpdateCatalog {
     const val REPO = "https://github.com/MithrilAddons/mithrilpf"
@@ -72,6 +75,16 @@ object UpdateCatalog {
                     require(size in 1..MAX_JAR.toLong())
                     val digest = asset["digest"].asString
                     require(digest.matches(Regex("sha256:[a-f0-9]{64}")))
+                    val signature =
+                        obj["assets"]
+                            .asJsonArray
+                            .single {
+                                it.asJsonObject["name"]?.asString == "$name.sig"
+                            }
+                            .asJsonObject
+                    require(signature["state"].asString == "uploaded")
+                    require(signature["size"].asString.toLong() == UpdateSignature.SIZE.toLong())
+                    require(signature["browser_download_url"].asString == "$url.sig")
                     UpdateRelease(version, URI(url), size, digest.substring(7))
                 } catch (_: RuntimeException) {
                     null

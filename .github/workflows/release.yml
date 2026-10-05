@@ -25,6 +25,10 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          java-version: '25'
+          distribution: temurin
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
@@ -38,6 +42,16 @@ jobs:
         with:
           name: reports-ubuntu-24.04
           path: release-reports
+      - name: Sign tested release artifact
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          artifact="release/mithrilpf-${version}.jar"
+          java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java sign "$version" "$artifact" "$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
       - name: Create draft from tested artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,9 +62,10 @@ jobs:
           version="${RELEASE_TAG#v}"
           artifact="mithrilpf-${version}.jar"
           test -f "release/$artifact"
+          java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java verify "$version" "release/$artifact" "release/$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
           (cd release && sha256sum "$artifact" > SHA256SUMS)
           python -m tools.release_notes
           notes="release/notes.md"
           args=(--draft --verify-tag --notes-file "$notes" --title "MithrilPF $version")
           if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" "release/$artifact" release/SHA256SUMS "${args[@]}"
+          gh release create "$RELEASE_TAG" "release/$artifact" "release/$artifact.sig" release/SHA256SUMS "${args[@]}"

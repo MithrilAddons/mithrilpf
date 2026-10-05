@@ -1,7 +1,10 @@
 package dev.mithril.mithrilpf.update
 
 import java.io.ByteArrayInputStream
+import java.net.URI
 import java.nio.file.Files
+import java.security.KeyPairGenerator
+import java.security.Signature
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -40,12 +43,36 @@ class UpdateServiceTest {
         }
 
         var requests = 0
+        var jarRequests = 0
 
-        fun start(official: Boolean = true, block: (() -> Unit)? = null): UpdateService {
+        fun start(
+            official: Boolean = true,
+            invalidSignature: Boolean = false,
+            tamperedJar: Boolean = false,
+            block: (() -> Unit)? = null,
+        ): UpdateService {
             val bytes = Files.readAllBytes(artifact)
             val hash = UpdateArtifact.hash(artifact)
+            val key = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+            val url =
+                "${UpdateCatalog.REPO}/releases/download/v0.3.0-beta.1/mithrilpf-0.3.0-beta.1.jar"
+            val signature =
+                Signature.getInstance("Ed25519").run {
+                    initSign(key.private)
+                    update(
+                        UpdateSignature.payload(
+                            UpdateRelease(
+                                ReleaseVersion.parse("0.3.0-beta.1")!!,
+                                URI(url),
+                                bytes.size.toLong(),
+                                hash,
+                            )
+                        )
+                    )
+                    sign().also { if (invalidSignature) it[0] = (it[0].toInt() xor 1).toByte() }
+                }
             val release =
-                """[{"tag_name":"v0.3.0-beta.1","draft":false,"prerelease":true,"published_at":"2026-09-26","assets":[{"name":"mithrilpf-0.3.0-beta.1.jar","state":"uploaded","size":${bytes.size},"digest":"sha256:$hash","browser_download_url":"${UpdateCatalog.REPO}/releases/download/v0.3.0-beta.1/mithrilpf-0.3.0-beta.1.jar"}]}]"""
+                """[{"tag_name":"v0.3.0-beta.1","draft":false,"prerelease":true,"published_at":"2026-09-26","assets":[{"name":"mithrilpf-0.3.0-beta.1.jar","state":"uploaded","size":${bytes.size},"digest":"sha256:$hash","browser_download_url":"$url"},{"name":"mithrilpf-0.3.0-beta.1.jar.sig","state":"uploaded","size":64,"browser_download_url":"$url.sig"}]}]"""
             return UpdateService(
                     UpdateEnvironment(
                         root,
@@ -54,6 +81,7 @@ class UpdateServiceTest {
                         installed,
                         { ByteArrayInputStream(byteArrayOf(1, 2)) },
                         official,
+                        key.public.encoded,
                     ),
                     { queue.add(it) },
                     { uri, _ ->
@@ -61,9 +89,13 @@ class UpdateServiceTest {
                         when {
                             uri.path.endsWith("/latest") -> "[]".toByteArray()
                             uri.host == "api.github.com" -> release.toByteArray()
+                            uri.path.endsWith(".sig") -> signature
                             else -> {
+                                jarRequests++
                                 block?.invoke()
-                                bytes
+                                bytes.copyOf().also {
+                                    if (tamperedJar) it[0] = (it[0].toInt() xor 1).toByte()
+                                }
                             }
                         }
                     },
@@ -87,6 +119,34 @@ class UpdateServiceTest {
             root.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun invalidSignatureNeverDownloadsOrStagesJar() =
+        Harness().use { h ->
+            val service = h.start(invalidSignature = true)
+            h.await("failed")
+            service.close()
+            assertNull(h.launched)
+            assertEquals(0, h.jarRequests)
+            assertEquals("synthetic old mod", Files.readString(h.installed))
+            Files.list(h.root.resolve("config/mithrilpf/updates")).use {
+                assertEquals(0, it.count())
+            }
+        }
+
+    @Test
+    fun signedMetadataCannotAuthorizeTamperedJar() =
+        Harness().use { h ->
+            val service = h.start(tamperedJar = true)
+            h.await("failed")
+            service.close()
+            assertNull(h.launched)
+            assertEquals(1, h.jarRequests)
+            assertEquals("synthetic old mod", Files.readString(h.installed))
+            Files.list(h.root.resolve("config/mithrilpf/updates")).use {
+                assertEquals(0, it.count())
+            }
+        }
 
     @Test
     fun localBuildNeverContactsRemoteOrLaunchesInstaller() =

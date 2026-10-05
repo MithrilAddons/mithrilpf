@@ -52,9 +52,14 @@ java {
 }
 sourceSets {
     updater {}
+    releaseTools {
+        java { srcDirs = ['tools']; include '**/ReleaseSigning.java' }
+    }
     test {
         compileClasspath += sourceSets.updater.output
         runtimeClasspath += sourceSets.updater.output
+        compileClasspath += sourceSets.releaseTools.output
+        runtimeClasspath += sourceSets.releaseTools.output
     }
 }
 tasks.register('updaterJar', Jar) {
@@ -73,7 +78,7 @@ tasks.withType(JavaCompile).configureEach { options.release = 25 }
 jacoco { toolVersion = '0.8.15' }
 jacocoTestReport {
     dependsOn test
-    sourceSets sourceSets.main, sourceSets.updater
+    sourceSets sourceSets.main, sourceSets.updater, sourceSets.releaseTools
     reports {
         xml.required = true
         html.required = true
@@ -91,7 +96,7 @@ sonar {
         property 'sonar.exclusions', 'src/main/resources/assets/mithrilpf/icon.png,tools/tests/**'
         // Minecraft widgets are verified in-game; headless state and input logic stay measured.
         property 'sonar.coverage.exclusions', 'src/main/kotlin/dev/mithril/mithrilpf/ui/FinderAvatar.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderBrowse.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderEditor.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderListingPreview.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderPartyRow.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderPartyView.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderReportScreen.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderSprites.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderNotifications.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/PartyFinderScreen.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderControls.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderHud.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/FinderTabButton.kt,src/main/kotlin/dev/mithril/mithrilpf/ui/SettingToggle.kt'
-        property 'sonar.java.binaries', files(sourceSets.main.output.classesDirs, sourceSets.updater.output.classesDirs)
+        property 'sonar.java.binaries', files(sourceSets.main.output.classesDirs, sourceSets.updater.output.classesDirs, sourceSets.releaseTools.output.classesDirs)
         property 'sonar.coverage.jacoco.xmlReportPaths', 'build/reports/jacoco/test/jacocoTestReport.xml'
         property 'sonar.python.version', '3.14'
         property 'sonar.python.coverage.reportPaths', 'build/reports/python/coverage.xml'
@@ -101,7 +106,7 @@ tasks.named('sonar') { dependsOn jacocoTestReport }
 
 spotless {
     java {
-        target 'src/**/*.java'
+        target 'src/**/*.java', 'tools/**/*.java'
         googleJavaFormat('1.36.1').aosp()
     }
     kotlin {
