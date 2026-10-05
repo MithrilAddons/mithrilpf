@@ -173,7 +173,7 @@ object DungeonTimers {
             detector.replay,
             clientSide && RunMapCapture.active(inDungeon, settings.solo, solo),
             hand,
-            player.mainHandItem.get(DataComponents.CUSTOM_DATA),
+            player.mainHandItem[DataComponents.CUSTOM_DATA],
             player.isShiftKeyDown,
             System.nanoTime(),
         )

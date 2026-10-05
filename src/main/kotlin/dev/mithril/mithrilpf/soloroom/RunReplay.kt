@@ -79,6 +79,26 @@ class RunReplay {
         val mapped = x >= -200 && x < -9 && z >= -200 && z < -9 && yaw.isFinite()
         val px = if (mapped) floor(x * 16).toInt() else 0
         val pz = if (mapped) floor(z * 16).toInt() else 0
+        var flags = sampleFlags(elapsed, mapped, px, pz)
+        if (elapsed == lastMillis) target.position(target.position() - STRIDE)
+        if (target.position() == 0) flags = (flags and 3) or 128
+        if (target.remaining() < STRIDE) {
+            buffer = null
+            return
+        }
+        val facing = if (mapped) (((yaw % 360 + 360) % 360) * 256 / 360).toInt() else 0
+        target.putInt(elapsed.toInt()).putShort(px.toShort()).putShort(pz.toShort())
+        target.put(facing.toByte()).put(flags.toByte()).putShort(secrets.toShort())
+        lastMillis = elapsed
+        lastX = px
+        lastZ = pz
+        lastFlags = flags
+        broken = false
+        pendingKind = 0
+        pendingCount = 0
+    }
+
+    private fun sampleFlags(elapsed: Long, mapped: Boolean, px: Int, pz: Int): Int {
         val dx = (px - lastX).toLong()
         val dz = (pz - lastZ).toLong()
         val jump = dx * dx + dz * dz >= 128 * 128
@@ -98,25 +118,10 @@ class RunReplay {
                 flags = flags or 1 or (kind shl 2) or ((maxOf(1, pendingCount) - 1) shl 5)
         }
         if (elapsed == lastMillis) {
-            target.position(target.position() - STRIDE)
             flags = flags or (lastFlags and 1)
             if (mapped && flags and 0x1c == 0) flags = flags or (lastFlags and 0x7c)
         }
-        if (target.position() == 0) flags = (flags and 3) or 128
-        if (target.remaining() < STRIDE) {
-            buffer = null
-            return
-        }
-        val facing = if (mapped) (((yaw % 360 + 360) % 360) * 256 / 360).toInt() else 0
-        target.putInt(elapsed.toInt()).putShort(px.toShort()).putShort(pz.toShort())
-        target.put(facing.toByte()).put(flags.toByte()).putShort(secrets.toShort())
-        lastMillis = elapsed
-        lastX = px
-        lastZ = pz
-        lastFlags = flags
-        broken = false
-        pendingKind = 0
-        pendingCount = 0
+        return flags
     }
 
     fun observeRoomSecrets(now: TimerStamp, tile: Int, found: Int, total: Int) {
