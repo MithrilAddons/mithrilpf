@@ -6,6 +6,7 @@ import dev.mithril.mithrilpf.soloroom.RoomDetector
 import dev.mithril.mithrilpf.soloroom.RunMapCapture
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
+import dev.mithril.mithrilpf.soloroom.TeleportItem
 import dev.mithril.mithrilpf.sync.RecordCapture
 import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
@@ -18,15 +19,20 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
+import net.fabricmc.fabric.api.event.player.UseBlockCallback
+import net.fabricmc.fabric.api.event.player.UseItemCallback
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.ChatFormatting
 import net.minecraft.client.Minecraft
+import net.minecraft.core.component.DataComponents
 import net.minecraft.network.Connection
 import net.minecraft.network.chat.Component
 import net.minecraft.network.protocol.Packet
 import net.minecraft.network.protocol.common.ClientboundPingPacket
 import net.minecraft.network.protocol.game.*
+import net.minecraft.world.InteractionHand
 import net.minecraft.world.entity.monster.zombie.Zombie
+import net.minecraft.world.entity.player.Player
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.scores.DisplaySlot
 import org.slf4j.LoggerFactory
@@ -54,6 +60,7 @@ object DungeonTimers {
     private var score = DungeonScore()
     private val tab = linkedMapOf<UUID, String>()
     private val recordCapture = RecordCapture()
+    private val teleportItem = TeleportItem()
     private const val BOSS_ENTRY = "Boss Entry"
 
     fun pollSyncEvent(): RecordEvent? = recordCapture.poll()
@@ -101,6 +108,12 @@ object DungeonTimers {
             }
         storage.load { settings = it }
         ClientTickEvents.END_CLIENT_TICK.register { tick(it) }
+        UseItemCallback.EVENT.register { player, level, hand ->
+            observeAbility(player, hand, level.isClientSide)
+        }
+        UseBlockCallback.EVENT.register { player, level, hand, _ ->
+            observeAbility(player, hand, level.isClientSide)
+        }
         ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register { _, _ -> reset() }
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset() }
         ClientLifecycleEvents.CLIENT_STOPPING.register { storage.close() }
@@ -154,6 +167,16 @@ object DungeonTimers {
     }
 
     fun now() = TimerStamp(ticks, System.nanoTime())
+
+    private fun observeAbility(player: Player, hand: InteractionHand, clientSide: Boolean) =
+        teleportItem.observeUse(
+            detector.replay,
+            clientSide && RunMapCapture.active(inDungeon, settings.solo, solo),
+            hand,
+            player.mainHandItem.get(DataComponents.CUSTOM_DATA),
+            player.isShiftKeyDown,
+            System.nanoTime(),
+        )
 
     private fun reset() {
         val client = Minecraft.getInstance()
@@ -333,7 +356,8 @@ object DungeonTimers {
                 if (child is ClientboundPingPacket && clock.accept(child.id, bundled)) ticks++
                 if (stopped) return@execute
                 if (RunMapCapture.active(inDungeon, settings.solo, solo)) {
-                    if (child is ClientboundPlayerPositionPacket) detector.replay.discontinuity()
+                    if (child is ClientboundPlayerPositionPacket)
+                        detector.replay.teleport(System.nanoTime())
                     actionBar?.let { detector.observeSecrets(client, it, now()) }
                 }
                 team?.let { observeLines(listOf(it)) }

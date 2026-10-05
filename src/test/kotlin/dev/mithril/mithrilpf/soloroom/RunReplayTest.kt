@@ -26,12 +26,18 @@ class RunReplayTest {
         replay.observe(stamp(15000), -153.0, -183.0, 360f, 3, finish = true)
         val frozen = assertNotNull(replay.freeze())
         val expected = javaClass.getResource("/contracts/run-replay-v1.json")!!.readText()
-        assertEquals(JsonParser.parseString(expected), frozen.encode())
+        val legacy = frozen.encode()
+        val legacyBytes = bytes(frozen)
+        for (offset in 9 until legacyBytes.size step 12) legacyBytes[offset] =
+            (legacyBytes[offset].toInt() and 3).toByte()
+        legacy.addProperty("samples", Base64.getEncoder().encodeToString(legacyBytes))
+        assertEquals(JsonParser.parseString(expected), legacy)
+        val encoded = frozen.encode()
         replay.observe(stamp(15200), -150.0, -183.0, 0f, 4)
         assertNull(replay.freeze())
         replay.begin(stamp(20000), -185.0, -185.0, 0f)
         assertNull(replay.freeze())
-        assertEquals(JsonParser.parseString(expected), frozen.encode())
+        assertEquals(encoded, frozen.encode())
     }
 
     @Test
