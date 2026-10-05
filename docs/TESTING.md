@@ -1,5 +1,10 @@
 # Testing
 
+Release-signing regression tests use temporary Ed25519 keys and synthetic JARs.
+They cover signer/updater interoperability, wrong keys, metadata and artifact
+tampering, unsigned/malformed signature assets, fail-closed staging, and secret
+redaction. They never use the production private key or a real mod installation.
+
 Run `gradlew.bat spotlessApply` (`sh gradlew spotlessApply` on Linux), then
 `python tools/check.py`. The script verifies wrapper integrity, JSON keys,
 branch policy, formatting, JVM tests and packaged-JAR metadata/entrypoints.

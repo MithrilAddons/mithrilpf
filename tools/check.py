@@ -82,6 +82,9 @@ def verify_jar(path):
             if name.endswith((".pem", ".key", ".log")) or name.startswith(("config/", "logs/")):
                 raise ValueError(f"Unexpected private/runtime artifact: {name}")
         jar.read("assets/mithrilpf/lang/en_us.json")
+        if jar.read("assets/mithrilpf/release-signing.pub") != (
+                ROOT / "src/main/resources/assets/mithrilpf/release-signing.pub").read_bytes():
+            raise ValueError("Packaged release trust anchor differs from source")
     print(f"Verified packaged mod: {path.name}")
 
 

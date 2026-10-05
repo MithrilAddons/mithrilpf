@@ -99,7 +99,7 @@ After a version bump PR is reviewed and merged into main, create and push a sign
 tag matching the version exactly (for example `v0.2.0`). The Release workflow
 validates the tag, main ancestry and JAR metadata, runs the full Windows/Linux
 checks, and creates a
-**draft** GitHub release with the tested Linux-built gameplay JAR, SHA-256 checksum
+**draft** GitHub release with the tested Linux-built gameplay JAR, Ed25519 signature, SHA-256 checksum
 and reviewed notes from `docs/releases/<mod_version>.md`. Follow the
 [announcement standard](RELEASING.md) when preparing that file in the version-bump
 PR. Prerelease tags are marked accordingly. A maintainer reviews
@@ -143,14 +143,17 @@ Checks/downloads run on a background worker. No GitHub login or Minecraft token
 is sent. With pre-releases off, only the latest published stable release is
 considered. With it on, the newest 50 published releases are searched by semantic
 version (up to five newer candidates inspected). Drafts, equal/older versions,
-missing checksums and incompatible Minecraft/dependency requirements are rejected.
+missing checksums/signatures and incompatible Minecraft/dependency requirements are rejected.
 Turning either toggle off cancels an in-progress/staged update as appropriate;
 it never downgrades an already-installed beta.
 
 Downloads are restricted to this repository's HTTPS GitHub release URLs and
-GitHub's release-asset host, with redirect, size and time limits. The SHA-256
-digest comes from GitHub's release API. This protects integrity but is **not**
-an independent signature or protection against a compromised GitHub publisher.
+GitHub's release-asset host, with redirect, size and time limits. The API's SHA-256
+digest, artifact size, filename, repository and version must be authenticated by
+an Ed25519 signature using the public key pinned in the installed mod. The JAR
+must then match that authenticated digest. Missing/invalid signatures never fall
+back to checksum-only installation. See [release signing](RELEASING.md#release-signatures)
+for key custody, bootstrap limitations and manual verification.
 The updater never updates Minecraft, Fabric, Kotlin or any other mod.
 
 A ready update is installed only after quitting Minecraft, by a tiny JDK-only

@@ -23,6 +23,17 @@ class UpdateTest {
                 JsonArray().apply {
                     add(
                         JsonObject().apply {
+                            addProperty("name", "mithrilpf-$version.jar.sig")
+                            addProperty("state", "uploaded")
+                            addProperty("size", 64)
+                            addProperty(
+                                "browser_download_url",
+                                "${UpdateCatalog.REPO}/releases/download/v$version/mithrilpf-$version.jar.sig",
+                            )
+                        }
+                    )
+                    add(
+                        JsonObject().apply {
                             addProperty("name", "mithrilpf-$version.jar")
                             addProperty("state", "uploaded")
                             addProperty("size", 1024)
@@ -93,7 +104,7 @@ class UpdateTest {
     fun rejectsUntrustedOrAmbiguousAssets() {
         for (key in listOf("browser_download_url", "digest", "state", "size")) {
             val data = release("1.0.0")
-            data["assets"].asJsonArray[0].asJsonObject.addProperty(key, "invalid")
+            data["assets"].asJsonArray[1].asJsonObject.addProperty(key, "invalid")
             assertTrue(UpdateCatalog.parse(data.toString(), "0.2.0", false).isEmpty())
         }
         val mismatch = release("1.0.0")
@@ -115,12 +126,27 @@ class UpdateTest {
     fun sizeBoundaries() {
         for (size in listOf(0, 1, UpdateCatalog.MAX_JAR, UpdateCatalog.MAX_JAR + 1)) {
             val data = release("1.0.0")
-            data["assets"].asJsonArray[0].asJsonObject.addProperty("size", size)
+            data["assets"].asJsonArray[1].asJsonObject.addProperty("size", size)
             assertEquals(
                 size in 1..UpdateCatalog.MAX_JAR,
                 UpdateCatalog.parse(data.toString(), "0.2.0", false).isNotEmpty(),
             )
         }
+    }
+
+    @Test
+    fun rejectsUnsignedAndInvalidSignatureAssets() {
+        for (key in listOf("state", "size", "browser_download_url", "name")) {
+            val data = release("1.0.0")
+            data["assets"].asJsonArray[0].asJsonObject.addProperty(key, "invalid")
+            assertTrue(UpdateCatalog.parse(data.toString(), "0.2.0", false).isEmpty())
+        }
+        val data = release("1.0.0")
+        data["assets"].asJsonArray.remove(0)
+        assertTrue(UpdateCatalog.parse(data.toString(), "0.2.0", false).isEmpty())
+        val duplicate = release("1.0.0")
+        duplicate["assets"].asJsonArray.add(duplicate["assets"].asJsonArray[1].deepCopy())
+        assertTrue(UpdateCatalog.parse(duplicate.toString(), "0.2.0", false).isEmpty())
     }
 
     @Test

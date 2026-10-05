@@ -101,7 +101,7 @@ tasks.named('sonar') { dependsOn jacocoTestReport }
 
 spotless {
     java {
-        target 'src/**/*.java'
+        target 'src/**/*.java', 'tools/*.java'
         googleJavaFormat('1.36.1').aosp()
     }
     kotlin {
