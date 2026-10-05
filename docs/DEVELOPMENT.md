@@ -179,6 +179,18 @@ bests; `/mithrilpfstatus` shows detection/storage status. The HUD editor support
 dragging, scaling and synthetic previews without creating records. Enable the
 Paul +10 score setting before a run when applicable.
 
+Solo replay samples also describe observed teleports without changing their
+12-byte size or five-per-second sampling rate. Main-hand item/block use callbacks
+pass through untouched. Vanilla custom data identifies etherwarp on merged AOTE
+or AOTV, instant transmission, and fully scrolled Wither Impact blades. The
+component classification is cached; only a changed component is copied for safe
+NBT inspection. A recent use labels one position packet within 500 ms. Types are
+observations, not proof of the server ability. Mixed chains are other/mixed and
+counts saturate at four or more. Small corrections and long/unmapped gaps stay
+plain breaks. The web API documents the shared flag contract and capability bit;
+deploy its accepting validator before publishing this client. Older recordings
+use approximate teleport inference in the website.
+
 Solo attempts require an observed solo roster; a teammate or death invalidates
 the attempt. Room timers count only time spent inside that room, including the
 clear time in the secrets total. Normal/master floors remain separate.

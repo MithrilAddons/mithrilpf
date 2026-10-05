@@ -18,6 +18,29 @@ class RunReplay {
     private var secrets = 0
     private var broken = true
     private var roomSecrets = RunRoomSecrets()
+    private var lastUseKind = 0
+    private var lastUseNanos = 0L
+    private var pendingKind = 0
+    private var pendingCount = 0
+
+    val active
+        get() = buffer != null
+
+    fun use(kind: Int, nanos: Long) {
+        if (!active) return
+        lastUseKind = kind
+        lastUseNanos = nanos
+    }
+
+    fun teleport(nanos: Long) {
+        if (!active) return
+        val kind =
+            if (lastUseKind != 0 && nanos - lastUseNanos in 0 until 500_000_000) lastUseKind else 4
+        lastUseKind = 0
+        pendingKind = if (pendingKind == 0 || pendingKind == kind) kind else 4
+        pendingCount = minOf(4, pendingCount + 1)
+        broken = true
+    }
 
     fun begin(now: TimerStamp, x: Double, z: Double, yaw: Float) {
         buffer = ByteBuffer.allocate(MAX_SAMPLES * STRIDE).order(ByteOrder.LITTLE_ENDIAN)
@@ -27,6 +50,9 @@ class RunReplay {
         secrets = 0
         broken = true
         roomSecrets = RunRoomSecrets()
+        lastUseKind = 0
+        pendingKind = 0
+        pendingCount = 0
         observe(now, x, z, yaw, null)
     }
 
@@ -53,16 +79,9 @@ class RunReplay {
         val mapped = x >= -200 && x < -9 && z >= -200 && z < -9 && yaw.isFinite()
         val px = if (mapped) floor(x * 16).toInt() else 0
         val pz = if (mapped) floor(z * 16).toInt() else 0
-        val dx = (px - lastX).toLong()
-        val dz = (pz - lastZ).toLong()
-        val jump = dx * dx + dz * dz >= 128 * 128
-        var flags = if (mapped) 0 else 2
-        if (broken || lastFlags and 2 != 0 || !mapped || elapsed - lastMillis > 1000 || jump)
-            flags = flags or 1
-        if (elapsed == lastMillis) {
-            target.position(target.position() - STRIDE)
-            flags = flags or (lastFlags and 1)
-        }
+        var flags = sampleFlags(elapsed, mapped, px, pz)
+        if (elapsed == lastMillis) target.position(target.position() - STRIDE)
+        if (target.position() == 0) flags = (flags and 3) or 128
         if (target.remaining() < STRIDE) {
             buffer = null
             return
@@ -75,6 +94,34 @@ class RunReplay {
         lastZ = pz
         lastFlags = flags
         broken = false
+        pendingKind = 0
+        pendingCount = 0
+    }
+
+    private fun sampleFlags(elapsed: Long, mapped: Boolean, px: Int, pz: Int): Int {
+        val dx = (px - lastX).toLong()
+        val dz = (pz - lastZ).toLong()
+        val jump = dx * dx + dz * dz >= 128 * 128
+        var flags = if (mapped) 0 else 2
+        if (broken || lastFlags and 2 != 0 || !mapped || elapsed - lastMillis > 1000 || jump)
+            flags = flags or 1
+        // A gap or an unavailable origin cannot establish a sampled jump.
+        if (
+            lastMillis >= 0 &&
+                mapped &&
+                lastFlags and 2 == 0 &&
+                elapsed - lastMillis <= 1000 &&
+                dx * dx + dz * dz >= 24 * 24
+        ) {
+            val kind = if (pendingCount > 0) pendingKind else if (jump) 4 else 0
+            if (kind != 0)
+                flags = flags or 1 or (kind shl 2) or ((maxOf(1, pendingCount) - 1) shl 5)
+        }
+        if (elapsed == lastMillis) {
+            flags = flags or (lastFlags and 1)
+            if (mapped && flags and 0x1c == 0) flags = flags or (lastFlags and 0x7c)
+        }
+        return flags
     }
 
     fun observeRoomSecrets(now: TimerStamp, tile: Int, found: Int, total: Int) {
