@@ -42,7 +42,7 @@ To verify a downloaded release using a separately trusted checkout and public ke
 run with JDK 25, substituting the release version and paths:
 
 ```text
-java tools/ReleaseSigning.java verify <version> <path-to-mithrilpf-version.jar> <path-to-jar.sig> src/main/resources/assets/mithrilpf/release-signing.pub
+java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java verify <version> <path-to-mithrilpf-version.jar> <path-to-jar.sig> src/main/resources/assets/mithrilpf/release-signing.pub
 ```
 
 Older clients do not verify signatures. Their first update to a signing-aware
@@ -58,7 +58,7 @@ release removing the old key. If the old key is compromised, stop publication an
 distribute a replacement trust anchor through an independent trusted channel;
 an update signed only by the compromised key cannot establish recovery trust.
 
-For initial setup only, `java tools/ReleaseSigning.java generate <private.key>
+For initial setup only, `java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java generate <private.key>
 <public.pub>` creates new files without overwriting existing keys. Create the
 private file in an owner-only directory (restrict Windows ACLs, or use `umask 077`
 on Unix) before transferring it to the named Actions secret.

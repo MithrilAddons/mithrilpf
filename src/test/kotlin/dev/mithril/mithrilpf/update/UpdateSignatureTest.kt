@@ -101,7 +101,7 @@ class UpdateSignatureTest {
             val process =
                 ProcessBuilder(
                         java,
-                        "tools/ReleaseSigning.java",
+                        "tools/dev/mithril/mithrilpf/release/ReleaseSigning.java",
                         "sign",
                         "1.0.0",
                         jar.toString(),

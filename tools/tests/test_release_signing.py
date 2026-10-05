@@ -15,7 +15,7 @@ class ReleaseSigningTest(unittest.TestCase):
     def setUpClass(cls):
         cls.classes = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.classes.cleanup)
-        subprocess.run(["javac", "-d", cls.classes.name, str(ROOT / "tools/ReleaseSigning.java")],
+        subprocess.run(["javac", "-d", cls.classes.name, str(ROOT / "tools/dev/mithril/mithrilpf/release/ReleaseSigning.java")],
                        check=True, capture_output=True, timeout=30)
 
     def setUp(self):
@@ -34,7 +34,8 @@ class ReleaseSigningTest(unittest.TestCase):
         environment.pop("RELEASE_SIGNING_KEY", None)
         if secret is not None:
             environment["RELEASE_SIGNING_KEY"] = secret
-        result = subprocess.run(["java", "-cp", self.classes.name, "ReleaseSigning", *map(str, args)],
+        result = subprocess.run(["java", "-cp", self.classes.name,
+                                 "dev.mithril.mithrilpf.release.ReleaseSigning", *map(str, args)],
                                 env=environment, capture_output=True, text=True, timeout=20)
         self.assertEqual(success, result.returncode == 0, result.stdout + result.stderr)
         if secret:
@@ -56,7 +57,7 @@ class ReleaseSigningTest(unittest.TestCase):
     def test_sign_verify_and_preserve_artifact(self):
         before = self.jar.read_bytes()
         self.sign()
-        self.assertEqual(64, self.signature.stat().st_size)
+        self.assertEqual(self.signature.stat().st_size, 64)
         self.assertEqual(before, self.jar.read_bytes())
         self.run_tool("verify", "1.0.0", self.jar, self.signature, self.public)
         self.sign(success=False)

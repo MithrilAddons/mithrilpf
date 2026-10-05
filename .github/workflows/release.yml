@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG#v}"
           artifact="release/mithrilpf-${version}.jar"
-          java tools/ReleaseSigning.java sign "$version" "$artifact" "$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
+          java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java sign "$version" "$artifact" "$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
       - name: Create draft from tested artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,7 +62,7 @@ jobs:
           version="${RELEASE_TAG#v}"
           artifact="mithrilpf-${version}.jar"
           test -f "release/$artifact"
-          java tools/ReleaseSigning.java verify "$version" "release/$artifact" "release/$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
+          java tools/dev/mithril/mithrilpf/release/ReleaseSigning.java verify "$version" "release/$artifact" "release/$artifact.sig" src/main/resources/assets/mithrilpf/release-signing.pub
           (cd release && sha256sum "$artifact" > SHA256SUMS)
           python -m tools.release_notes
           notes="release/notes.md"
