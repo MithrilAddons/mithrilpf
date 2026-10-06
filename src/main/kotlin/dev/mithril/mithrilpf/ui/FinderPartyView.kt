@@ -143,13 +143,13 @@ class FinderPartyView(
                 width,
                 if (status == "conflict") Palette.DANGER else Palette.MUTED,
             )
-            if (party.youLead && party.invited)
+            if (party.youLead)
                 roster.button(
-                    finderText("party.retry"),
+                    finderText(if (party.invited) "party.retry" else "party.invite"),
                     width,
                     enabled = MithrilPF.partyHandoff?.ready == true,
                 ) {
-                    MithrilPF.retryPartyInvites()
+                    MithrilPF.invitePartyMembers()
                 }
         }
     }

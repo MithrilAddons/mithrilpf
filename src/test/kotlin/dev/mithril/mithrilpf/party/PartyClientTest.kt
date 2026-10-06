@@ -72,13 +72,17 @@ class PartyClientTest {
                         "party-verify" ->
                             """{"version":1,"party_token":"${"t".repeat(43)}","expires_in_seconds":2592000,"user":{"uuid":"${host.uuid}"}}"""
                         "invite" -> {
-                            response.getAsJsonObject("party").addProperty("invited", true)
-                            response
-                                .deepCopy()
-                                .apply {
-                                    add("invite", JsonArray().apply { missing.forEach(::add) })
-                                }
-                                .toString()
+                            val party = response.get("party")
+                            if (party.isJsonNull) response.toString()
+                            else {
+                                party.asJsonObject.addProperty("invited", true)
+                                response
+                                    .deepCopy()
+                                    .apply {
+                                        add("invite", JsonArray().apply { missing.forEach(::add) })
+                                    }
+                                    .toString()
+                            }
                         }
                         else -> response.toString()
                     }
@@ -108,12 +112,14 @@ class PartyClientTest {
     }
 
     @Test
-    fun leaderInvitesAllFourInOneCommandAndRetriesOnlyMissingPlayers() {
+    fun chatClickChecksPartyThenInvitesAllFourAndRetriesOnlyMissingPlayers() {
         Harness().use { h ->
             h.poll()
             assertEquals("connected", h.client.status)
-            assertEquals(listOf("reserved", "full"), h.host.messages)
+            assertEquals(listOf("reserved", "full", "ready"), h.host.messages)
             h.tick()
+            assertTrue(h.host.commands.isEmpty())
+            h.client.chatClicked()
             assertEquals(listOf("party list"), h.host.commands)
             h.solo()
             h.tick()
@@ -124,10 +130,13 @@ class PartyClientTest {
             h.tick()
             assertEquals(1, h.host.commands.count { it.startsWith("p ") })
             h.missing = listOf("Gamma", "Epsilon")
-            h.client.reinvite()
+            h.client.chatClicked()
+            h.client.invite()
+            assertEquals("cooldown", h.host.messages.last())
+            assertEquals(1, h.host.commands.count { it == "party list" })
+            h.time += 10_000
+            h.client.invite()
             assertEquals("checking", h.host.messages.last())
-            h.time += 1000
-            h.tick()
             h.solo()
             h.tick()
             h.host.apply()
@@ -140,11 +149,97 @@ class PartyClientTest {
     }
 
     @Test
+    fun ticksAndUnrequestedInvitesNeverSendCommands() {
+        Harness().use { h ->
+            h.client.chatClicked()
+            assertTrue(h.host.messages.isEmpty())
+            h.poll()
+            repeat(20) {
+                h.time += 10_000
+                h.tick()
+            }
+            h.response.getAsJsonObject("party").addProperty("invited", true)
+            h.response.add("invite", JsonArray().apply { h.missing.forEach(::add) })
+            h.poll()
+            repeat(5) {
+                h.time += 1000
+                h.tick()
+            }
+            assertTrue(h.host.commands.isEmpty())
+            assertTrue(h.requests.none { it.first == "invite" })
+        }
+    }
+
+    @Test
+    fun joinAndLeaveLinesTrackTheRosterUntilEveryoneJoined() {
+        Harness().use { h ->
+            h.poll()
+            h.client.chatClicked()
+            h.solo()
+            h.tick()
+            h.host.apply()
+            h.time += 1000
+            h.tick()
+            for (line in
+                listOf(
+                    "§b[MVP§c+§b] Beta §ejoined the party.",
+                    "Gamma joined the party.",
+                    "[VIP] Mallory: Delta joined the party.",
+                    "Party > [VIP] Gamma: Epsilon joined the party.",
+                    "[VIP] Delta joined the party.",
+                    "[VIP] Delta has left the party.",
+                )) h.client.chat(line)
+            h.tick()
+            h.host.apply()
+            val report = h.requests.last()
+            assertEquals("roster", report.first)
+            assertEquals(
+                listOf("Alpha", "Beta", "Gamma"),
+                report.second.getAsJsonArray("members").map { it.asString },
+            )
+            h.client.chat("[MVP+] Delta joined the party.")
+            h.client.chat("[MVP++] Epsilon joined the party.")
+            h.tick()
+            h.host.apply()
+            assertEquals("roster", h.requests.last().first)
+            assertEquals(5, h.requests.last().second.getAsJsonArray("members").size())
+            assertEquals(listOf("party list", "p Beta Gamma Delta Epsilon"), h.host.commands)
+        }
+    }
+
+    @Test
+    fun outsiderJoiningStopsTrackingAndDisbandingClearsTheRoster() {
+        Harness().use { h ->
+            h.poll()
+            h.client.chatClicked()
+            h.solo()
+            h.client.chat("[VIP] Outsider joined the party.")
+            assertEquals("conflict", h.client.status)
+            h.client.chat("[VIP] Beta joined the party.")
+            h.tick()
+            h.host.apply()
+            assertTrue(h.requests.none { it.first == "invite" || it.first == "roster" })
+            h.time += 10_000
+            h.client.chatClicked()
+            h.solo()
+            h.client.chat("[MVP+] Alpha has disbanded the party!")
+            h.client.chat("[VIP] Beta joined the party.")
+            h.tick()
+            h.host.apply()
+            assertEquals(
+                listOf("Alpha"),
+                h.requests.last().second.getAsJsonArray("members").map { it.asString },
+            )
+        }
+    }
+
+    @Test
     fun signOutCancelsQueuedInviteAndIgnoresHeldReply() {
         Harness().use { h ->
             h.poll("native")
             assertFalse("reserved" in h.host.messages)
             h.tick("native")
+            h.client.chatClicked()
             h.solo()
             h.tick("native")
             val pending = assertNotNull(h.host.callbacks.poll(5, TimeUnit.SECONDS))
@@ -161,7 +256,7 @@ class PartyClientTest {
     fun accountOrConnectionSwitchDiscardsQueuedInvite() {
         Harness().use { h ->
             h.poll()
-            h.tick()
+            h.client.chatClicked()
             h.solo()
             h.tick()
             h.host.apply()
@@ -182,10 +277,10 @@ class PartyClientTest {
     @Test
     fun outsiderRosterBlocksInvitesAndMembersNeverRunLeaderCommands() {
         Harness().use { h ->
-            h.client.reinvite()
+            h.client.invite()
             assertEquals("not_ready", h.host.messages.last())
             h.poll()
-            h.tick()
+            h.client.chatClicked()
             h.client.chat("Party Members (2)")
             h.client.chat("Party Leader: Alpha ●")
             h.client.chat("Party Members: Outsider ●")
@@ -195,8 +290,9 @@ class PartyClientTest {
             h.poll()
             h.host.commands.clear()
             h.tick()
+            h.client.chatClicked()
             assertTrue(h.host.commands.isEmpty())
-            h.client.reinvite()
+            h.client.invite()
             assertEquals("not_ready", h.host.messages.last())
         }
     }
@@ -205,7 +301,7 @@ class PartyClientTest {
     fun completedRosterClearsPartyAndReportsCompletion() {
         Harness().use { h ->
             h.poll()
-            h.tick()
+            h.client.chatClicked()
             h.client.chat("Party Members (5)")
             h.client.chat("Party Leader: Alpha ●")
             h.client.chat("Party Members: Beta ● Gamma ● Delta ● Epsilon ●")
@@ -253,7 +349,7 @@ class PartyClientTest {
     fun foreignServersCannotSendInvitesAndGenerationChangesResetRoster() {
         Harness().use { h ->
             h.poll()
-            h.tick()
+            h.client.chatClicked()
             h.response.getAsJsonObject("party").addProperty("handoff_id", "batch0000002")
             h.poll()
             h.solo() // The roster request from the previous generation is no longer valid.
@@ -262,7 +358,8 @@ class PartyClientTest {
                 h.host.server = server
                 h.host.commands.clear()
                 h.tick()
-                h.client.reinvite()
+                h.client.invite()
+                h.client.chatClicked()
                 assertTrue(h.host.commands.isEmpty())
                 assertEquals("not_ready", h.host.messages.last())
             }

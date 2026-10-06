@@ -58,4 +58,43 @@ class PartyRosterParserTest {
         parser.receive("Party Members (1)", "Alpha", 101)
         assertNull(parser.receive("Party Leader: Beta ●", "Alpha", 102))
     }
+
+    @Test
+    fun `join and leave lines update a confirmed roster without trusting player chat`() {
+        val parser = PartyRosterParser()
+        val roster = GameRoster("Alpha", listOf("Alpha", "Beta"))
+        assertEquals(
+            GameRoster("Alpha", listOf("Alpha", "Beta", "Gamma")),
+            parser.membership("§b[MVP§c+§b] Gamma §ejoined the party.", roster)?.roster,
+        )
+        assertNull(parser.membership("beta joined the party.", roster))
+        assertEquals(
+            GameRoster("Alpha", listOf("Alpha")),
+            parser.membership("[VIP] Beta has left the party.", roster)?.roster,
+        )
+        assertEquals(
+            GameRoster("Alpha", listOf("Alpha")),
+            parser.membership("Beta has been removed from the party.", roster)?.roster,
+        )
+        assertNull(parser.membership("Gamma has left the party.", roster))
+        for (spoof in
+            listOf(
+                "[VIP] Mallory: Gamma joined the party.",
+                "Party > [VIP] Beta: Gamma joined the party.",
+                "From [VIP] Beta: Gamma joined the party.",
+                "Gamma joined the party",
+                "Gamma joined the party!",
+            )) assertNull(parser.membership(spoof, roster), spoof)
+        for (ended in
+            listOf(
+                "[MVP+] Alpha has disbanded the party!",
+                "You left the party.",
+                "The party was transferred to [VIP] Beta by [MVP+] Alpha",
+                "The party was disbanded because all invites expired and the party was empty.",
+                "Alpha has left the party.",
+            )) {
+            val change = assertNotNull(parser.membership(ended, roster), ended)
+            assertNull(change.roster, ended)
+        }
+    }
 }

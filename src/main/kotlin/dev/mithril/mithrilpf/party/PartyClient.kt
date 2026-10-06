@@ -81,10 +81,11 @@ internal constructor(
     private var generation = 0
     private var busy = false
     private var nextPoll = 0L
-    private var nextRoster = 0L
     private var nextCommand = 0L
+    private var nextInvite = 0L
     private var report: PartyReport? = null
-    private var retry = false
+    private var requested = false
+    private var roster: GameRoster? = null
     private var failures = 0
     var party: PartyHandoff? = null
         private set
@@ -104,31 +105,72 @@ internal constructor(
             (server == "hypixel.net" || server.endsWith(".hypixel.net"))
     }
 
-    fun reinvite() {
-        if (!online() || party?.ready != true || party?.invited != true || invites.isNotEmpty()) {
+    /**
+     * Hypixel commands only follow a user action: this click, command or button sends one /party
+     * list, and the server's reply to that report may add one /p for missing players.
+     */
+    fun invite() {
+        val time = now()
+        if (!online() || party?.ready != true || invites.isNotEmpty()) {
             message("not_ready")
             return
         }
-        retry = true
-        nextRoster = 0
+        if (time < nextInvite) {
+            message("cooldown")
+            return
+        }
+        requestRoster(time)
+    }
+
+    /** Any click in the open chat screen invites while a ready party is still missing players. */
+    fun chatClicked() {
+        val time = now()
+        if (
+            online() &&
+                party?.ready == true &&
+                invites.isEmpty() &&
+                (roster?.names?.size ?: 0) < 5 &&
+                time >= nextInvite
+        )
+            requestRoster(time)
+    }
+
+    private fun requestRoster(time: Long) {
+        requested = true
+        parser.request(time)
+        host.command("party list")
+        nextInvite = time + 10_000
+        nextCommand = time + 1_000
         message("checking")
     }
 
     fun chat(text: String) {
         if (!online()) return
-        val roster = parser.receive(text, host.name, now()) ?: return
+        val listed = parser.receive(text, host.name, now())
         val current = party ?: return
         if (!current.youLead) return
-        if (!current.accepts(roster)) {
+        val updated =
+            listed
+                ?: roster
+                    ?.let { parser.membership(text, it) }
+                    ?.let { change ->
+                        if (change.roster == null) roster = null
+                        change.roster
+                    }
+                ?: return
+        if (!current.accepts(updated)) {
             invites.clear()
-            retry = false
+            report = null
+            requested = false
+            roster = null
             if (status != "conflict") message("conflict")
             status = "conflict"
             return
         }
-        val action = if (current.ready && (!current.invited || retry)) retry else null
-        report = PartyReport(current, roster, action)
-        retry = false
+        roster = updated
+        val action = if (listed != null && requested && current.ready) current.invited else null
+        if (listed != null) requested = false
+        report = PartyReport(current, updated, action)
         nextPoll = 0
     }
 
@@ -218,11 +260,11 @@ internal constructor(
         party = null
         activity = null
         report = null
-        retry = false
+        requested = false
+        roster = null
         invites.clear()
         parser.reset()
         nextPoll = 0
-        nextRoster = 0
     }
 
     private fun tickCommands(inGame: Boolean, time: Long) {
@@ -231,28 +273,16 @@ internal constructor(
             invites.clear()
             parser.reset()
             report = null
-            retry = false
+            requested = false
+            roster = null
         }
+        // Invites only exist in reply to a user's own invite request (see updateParty).
         if (inGame && time >= nextCommand && invites.isNotEmpty()) {
             if (current?.youLead == true && current.invited) {
                 host.command("p ${invites.joinToString(" ")}")
                 invites.clear()
                 nextCommand = time + 1_000
             } else invites.clear()
-        }
-        if (
-            inGame &&
-                current?.youLead == true &&
-                current.full &&
-                invites.isEmpty() &&
-                time >= nextRoster &&
-                time >= nextCommand &&
-                (current.ready || current.invited)
-        ) {
-            parser.request(time)
-            host.command("party list")
-            nextRoster = time + 10_000
-            nextCommand = time + 1_000
         }
     }
 
@@ -276,17 +306,16 @@ internal constructor(
         party = received?.party
         activity = received?.activity
         if (party != null && previous?.id != party?.id) message("reserved")
-        if (previous?.generation != party?.generation) {
+        val handoff = previous?.generation != party?.generation
+        if (handoff) {
             invites.clear()
             parser.reset()
-            nextRoster = 0
+            requested = false
+            roster = null
         }
-        if (
-            party?.full == true &&
-                (previous?.full != true || previous.generation != party?.generation)
-        )
-            message("full")
-        if (received?.invites?.isNotEmpty() == true && online()) {
+        if (party?.full == true && (previous?.full != true || handoff)) message("full")
+        if (party?.ready == true && (previous?.ready != true || handoff)) message("ready")
+        if (received?.invites?.isNotEmpty() == true && outgoing?.retry != null && online()) {
             invites.addAll(received.invites)
             message("inviting")
         }

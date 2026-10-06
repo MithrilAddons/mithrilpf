@@ -260,10 +260,14 @@ Signing out revokes credentials derived from that session without deleting saved
 records. Sync is bounded, retries outages and separates accounts. SS tracking is not implemented.
 
 Party handoff uses a separate 30-day presence credential; it cannot upload records
-or log into the browser. All five must be online before one automatic `/p name1 name2 name3 name4` command from the leader.
-`/mithrilpfreinvite` explicitly retries missing players together in one `/p` command. Complete English
-`/party list` replies confirm membership. Conflicting game parties stop invites;
-the mod never kicks, disbands or leaves automatically. The canonical protocol
+or log into the browser. The mod never sends a Hypixel command on its own. Once all five
+are online, the leader opens chat and clicks anywhere (or uses `/mpfinvite`, also
+`/mithrilpfinvite`/`/mithrilpfreinvite`, or the finder screen's button). That click sends one
+`/party list`; if the complete English reply matches the finder party, the server's answer adds
+one `/p name1 name2 name3 name4` for players still missing. Later clicks re-invite only missing
+players, at most once every ten seconds. After that check, Hypixel's join/leave lines keep the
+roster current and the listing closes once all five have joined. Conflicting game parties stop
+invites; the mod never kicks, disbands or leaves automatically. The canonical protocol
 lives in the web repository's
 [API guide](https://github.com/MithrilAddons/web/blob/main/docs/API.md).
 

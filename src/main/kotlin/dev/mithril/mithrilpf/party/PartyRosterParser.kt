@@ -62,4 +62,40 @@ class PartyRosterParser {
         reset()
         return result
     }
+
+    /**
+     * Applies Hypixel's own join/leave lines to a confirmed roster. Anchored, so player chat
+     * ("Name: …") never matches. Returns null for unrelated lines; an ended party clears the
+     * roster.
+     */
+    fun membership(raw: String, roster: GameRoster): MembershipChange? {
+        val text = raw.replace(Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE), "").trim()
+        val rank = "(?:\\[[^]\\r\\n]+] )?"
+        Regex("$rank([A-Za-z0-9_]{1,16}) joined the party\\.").matchEntire(text)?.let { match ->
+            val name = match.groupValues[1]
+            if (roster.names.any { it.equals(name, true) }) return null
+            return MembershipChange(roster.copy(names = roster.names + name))
+        }
+        Regex("$rank([A-Za-z0-9_]{1,16}) has (?:left|been removed from) the party\\.")
+            .matchEntire(text)
+            ?.let { match ->
+                val name = match.groupValues[1]
+                if (name.equals(roster.leader, true)) return MembershipChange(null)
+                val names = roster.names.filterNot { it.equals(name, true) }
+                return if (names.size == roster.names.size) null
+                else MembershipChange(roster.copy(names = names))
+            }
+        if (
+            text == "You left the party." ||
+                text.startsWith("You have been kicked from the party") ||
+                text.startsWith("The party was transferred to ") ||
+                text.startsWith("The party was disbanded") ||
+                Regex("$rank[A-Za-z0-9_]{1,16} has disbanded the party!").matches(text)
+        )
+            return MembershipChange(null)
+        return null
+    }
 }
+
+/** A roster after a join/leave line; null when the game party ended or changed hands. */
+data class MembershipChange(val roster: GameRoster?)
