@@ -14,6 +14,7 @@ import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.FinderNavigation
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
+import java.util.UUID
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
@@ -22,8 +23,13 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
+import net.hypixel.modapi.HypixelModAPI
+import net.hypixel.modapi.packet.impl.clientbound.ClientboundPartyInfoPacket
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.ChatScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
@@ -57,8 +63,32 @@ object MithrilPF : ClientModInitializer {
     val partyHandoff
         get() = if (::parties.isInitialized) parties.party else null
 
-    fun retryPartyInvites() {
-        if (::parties.isInitialized) parties.reinvite()
+    fun invitePartyMembers() {
+        if (::parties.isInitialized) parties.invite()
+    }
+
+    /** Game chat, Hypixel Mod API party info and chat-screen clicks feed the party client. */
+    private fun registerPartyEvents(client: Minecraft) {
+        ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
+            // ALLOW_GAME still visits every listener when another mod hides the message.
+            if (!overlay) parties.chat(message.string)
+            true
+        }
+        HypixelModAPI.getInstance()
+            .createHandler(ClientboundPartyInfoPacket::class.java) { packet ->
+                fun hex(uuid: UUID) = uuid.toString().replace("-", "")
+                val leader = packet.leader.orElse(null)?.let(::hex)
+                val members = if (packet.isInParty) packet.members.map(::hex).toSet() else setOf()
+                client.execute { parties.partyInfo(leader, members) }
+            }
+            .onError { client.execute { parties.partyInfoFailed() } }
+        ScreenEvents.AFTER_INIT.register { _, screen, _, _ ->
+            if (screen is ChatScreen)
+                ScreenMouseEvents.afterMouseClick(screen).register { _, _, consumed ->
+                    parties.chatClicked()
+                    consumed
+                }
+        }
     }
 
     override fun onInitializeClient() {
@@ -70,11 +100,7 @@ object MithrilPF : ClientModInitializer {
         parties = PartyClient(client)
         discord = DiscordPresence()
         updates = ModUpdates(client)
-        ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
-            // ALLOW_GAME still visits every listener when another mod hides the message.
-            if (!overlay) parties.chat(message.string)
-            true
-        }
+        registerPartyEvents(client)
         DungeonTimers.register()
         dev.mithril.mithrilpf.ui.FinderHud.register()
         val key =
@@ -104,12 +130,13 @@ object MithrilPF : ClientModInitializer {
                         }
                     )
             )
-            dispatcher.register(
-                literal("mithrilpfreinvite").executes {
-                    parties.reinvite()
-                    1
-                }
-            )
+            for (name in listOf("mpfinvite", "mithrilpfinvite", "mithrilpfreinvite")) dispatcher
+                .register(
+                    literal(name).executes {
+                        parties.invite()
+                        1
+                    }
+                )
             dispatcher.register(
                 literal("mithrilpf").executes {
                     openRequested = true

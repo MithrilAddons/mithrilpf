@@ -5,8 +5,9 @@ under Apache License 2.0. Script copyright/license headers are retained; the wra
 JAR contains its own notices. Source: https://github.com/gradle/gradle, version 9.7.1.
 License: https://www.apache.org/licenses/LICENSE-2.0
 
-Fabric Loader/API, Fabric Language Kotlin, Minecraft libraries, and optional Mod Menu
-are resolved by Gradle/installed separately, not embedded in the gameplay JAR.
+Fabric Loader/API, Fabric Language Kotlin, the Hypixel Mod API (MIT,
+https://github.com/HypixelDev/ModAPI), Minecraft libraries, and optional Mod Menu are
+resolved by Gradle/installed separately, not embedded in the gameplay JAR.
 No external fonts, sounds, or artwork are bundled.
 
 ## Local QR generation

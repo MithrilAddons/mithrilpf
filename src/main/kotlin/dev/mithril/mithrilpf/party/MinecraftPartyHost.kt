@@ -1,6 +1,8 @@
 package dev.mithril.mithrilpf.party
 
 import dev.mithril.mithrilpf.ui.Palette
+import net.hypixel.modapi.HypixelModAPI
+import net.hypixel.modapi.packet.impl.serverbound.ServerboundPartyInfoPacket
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
@@ -32,6 +34,9 @@ internal class MinecraftPartyHost(private val client: Minecraft) : PartyHost {
     override fun command(command: String) {
         client.connection?.sendCommand(command)
     }
+
+    override fun requestPartyInfo() =
+        HypixelModAPI.getInstance().sendPacket(ServerboundPartyInfoPacket())
 
     override fun message(key: String) {
         client.player?.sendSystemMessage(Component.translatable("party.mithrilpf.$key"))

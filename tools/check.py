@@ -56,7 +56,8 @@ def verify_jar(path):
         if distribution != {"version": expected_version,
                             "officialRelease": str(release_build).lower()}:
             raise ValueError("Incorrect updater distribution marker")
-        expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin"}
+        expected = {"fabricloader", "minecraft", "java", "fabric-api", "fabric-language-kotlin",
+                    "hypixel-mod-api"}
         if set(metadata["depends"]) != expected:
             raise ValueError("Unexpected required dependency")
         if metadata.get("mixins") != ["mithrilpf.mixins.json"]:

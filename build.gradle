@@ -16,6 +16,14 @@ repositories {
         url = 'https://maven.terraformersmc.com/releases/'
         content { includeGroup 'com.terraformersmc' }
     }
+    maven {
+        url = 'https://repo.hypixel.net/repository/Hypixel/'
+        content { includeModule 'net.hypixel', 'mod-api' }
+    }
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeModule 'maven.modrinth', 'hypixel-mod-api' }
+    }
 }
 
 dependencies {
@@ -24,6 +32,9 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     implementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
     compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    // Required at runtime as the separate Hypixel Mod API mod, which bundles this library.
+    compileOnly("net.hypixel:mod-api:${project.hypixel_mod_api_version}") { transitive = false }
+    localRuntime "maven.modrinth:hypixel-mod-api:${project.hypixel_mod_api_fabric_version}"
     implementation 'io.nayuki:qrcodegen:1.8.0'
     include 'io.nayuki:qrcodegen:1.8.0'
     testImplementation 'com.google.zxing:core:3.5.4'

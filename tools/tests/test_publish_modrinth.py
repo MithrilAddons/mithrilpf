@@ -46,7 +46,7 @@ class ModrinthPublishingTest(unittest.TestCase):
         self.assertEqual("Release notes", payload["changelog"])
         self.assertEqual("beta", payload["version_type"])
         self.assertEqual(["fabric"], payload["loaders"])
-        self.assertEqual(["required", "required", "optional"],
+        self.assertEqual(["required", "required", "required", "optional"],
                          [d["dependency_type"] for d in payload["dependencies"]])
 
     def test_rejects_drafts_mismatched_tags_and_channel_flags(self):
