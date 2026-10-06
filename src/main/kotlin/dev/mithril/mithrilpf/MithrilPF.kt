@@ -67,15 +67,8 @@ object MithrilPF : ClientModInitializer {
         if (::parties.isInitialized) parties.invite()
     }
 
-    override fun onInitializeClient() {
-        val client = Minecraft.getInstance()
-        browserLink = BrowserLink(client)
-        nativeAccount = NativeAccount(client)
-        finder = FinderClient(client, nativeAccount)
-        recordSync = RecordSync(client)
-        parties = PartyClient(client)
-        discord = DiscordPresence()
-        updates = ModUpdates(client)
+    /** Game chat, Hypixel Mod API party info and chat-screen clicks feed the party client. */
+    private fun registerPartyEvents(client: Minecraft) {
         ClientReceiveMessageEvents.ALLOW_GAME.register { message, overlay ->
             // ALLOW_GAME still visits every listener when another mod hides the message.
             if (!overlay) parties.chat(message.string)
@@ -96,6 +89,18 @@ object MithrilPF : ClientModInitializer {
                     consumed
                 }
         }
+    }
+
+    override fun onInitializeClient() {
+        val client = Minecraft.getInstance()
+        browserLink = BrowserLink(client)
+        nativeAccount = NativeAccount(client)
+        finder = FinderClient(client, nativeAccount)
+        recordSync = RecordSync(client)
+        parties = PartyClient(client)
+        discord = DiscordPresence()
+        updates = ModUpdates(client)
+        registerPartyEvents(client)
         DungeonTimers.register()
         dev.mithril.mithrilpf.ui.FinderHud.register()
         val key =
