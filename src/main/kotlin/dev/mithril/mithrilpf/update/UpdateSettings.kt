@@ -6,7 +6,16 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
-data class UpdateSettings(val enabled: Boolean = true, val prereleases: Boolean = false)
+/**
+ * [enabled] only allows checking on launch; every install still needs the player's approval.
+ * [asked] is false only for a new install that has not answered the first-run prompt.
+ */
+data class UpdateSettings(
+    val enabled: Boolean = true,
+    val prereleases: Boolean = false,
+    val skipped: String? = null,
+    val asked: Boolean = true,
+)
 
 /** Accessed only by the updater worker. Unknown fields survive writes. */
 class UpdateSettingsStore(private val path: Path) {
@@ -26,8 +35,20 @@ class UpdateSettingsStore(private val path: Path) {
             require(v.isJsonPrimitive && v.asJsonPrimitive.isBoolean)
             return v.asBoolean
         }
-        return UpdateSettings(bool("enabled", true), bool("prereleases", false))
+        val skipped =
+            root["skipped"]?.let {
+                require(it.isJsonPrimitive && it.asJsonPrimitive.isString)
+                it.asString.also { text -> require(ReleaseVersion.parse(text) != null) }
+            }
+        return UpdateSettings(
+            bool("enabled", true),
+            bool("prereleases", false),
+            skipped,
+            bool("asked", true),
+        )
     }
+
+    fun exists(): Boolean = Files.exists(path)
 
     fun load() = decode(read())
 
@@ -35,6 +56,9 @@ class UpdateSettingsStore(private val path: Path) {
         val root = read()
         root.addProperty("enabled", settings.enabled)
         root.addProperty("prereleases", settings.prereleases)
+        if (settings.skipped == null) root.remove("skipped")
+        else root.addProperty("skipped", settings.skipped)
+        root.addProperty("asked", settings.asked)
         Files.createDirectories(path.parent)
         val temp = Files.createTempFile(path.parent, "updates-", ".tmp")
         try {

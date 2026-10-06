@@ -30,20 +30,26 @@ data class ReleaseVersion(val text: String, private val parts: List<Int>) :
     }
 }
 
+/** [notes] are untrusted display text; only the signed fields authorize an install. */
 data class UpdateRelease(
     val version: ReleaseVersion,
     val uri: URI,
     val size: Long,
     val sha256: String,
+    val notes: String = "",
 ) {
     val signatureUri: URI
         get() = URI("$uri.sig")
+
+    val page: URI
+        get() = URI("${UpdateCatalog.REPO}/releases/tag/v${version.text}")
 }
 
 object UpdateCatalog {
     const val REPO = "https://github.com/MithrilAddons/mithrilpf"
     const val API = "https://api.github.com/repos/MithrilAddons/mithrilpf/releases"
     const val MAX_JAR = 16 * 1024 * 1024
+    const val MAX_NOTES = 8192
 
     fun parse(json: String, current: String, betas: Boolean): List<UpdateRelease> {
         require(json.length <= 1024 * 1024)
@@ -85,7 +91,9 @@ object UpdateCatalog {
                     require(signature["state"].asString == "uploaded")
                     require(signature["size"].asString.toLong() == UpdateSignature.SIZE.toLong())
                     require(signature["browser_download_url"].asString == "$url.sig")
-                    UpdateRelease(version, URI(url), size, digest.substring(7))
+                    val notes =
+                        obj["body"]?.takeIf { it.isJsonPrimitive }?.asString?.take(MAX_NOTES) ?: ""
+                    UpdateRelease(version, URI(url), size, digest.substring(7), notes)
                 } catch (_: RuntimeException) {
                     null
                 }
