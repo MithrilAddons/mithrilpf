@@ -72,6 +72,7 @@ internal constructor(
             },
         )
     private val parser = PartyRosterParser()
+    private val game = GamePartyTracker()
     private val invites = ArrayDeque<String>()
     private var pending: Future<*>? = null
     private var account = ""
@@ -85,7 +86,6 @@ internal constructor(
     private var nextInvite = 0L
     private var report: PartyReport? = null
     private var requested = false
-    private var roster: GameRoster? = null
     private var failures = 0
     var party: PartyHandoff? = null
         private set
@@ -106,8 +106,9 @@ internal constructor(
     }
 
     /**
-     * Hypixel commands only follow a user action: this click, command or button sends one /party
-     * list, and the server's reply to that report may add one /p for missing players.
+     * Hypixel commands only follow a user action: this click, command or button reports the tracked
+     * game party, and the server's reply may add one /p for missing players. Only when the game
+     * party is unknown (after a launch or reconnect) does it first send one /party list.
      */
     fun invite() {
         val time = now()
@@ -119,7 +120,7 @@ internal constructor(
             message("cooldown")
             return
         }
-        requestRoster(time)
+        startRound(time)
     }
 
     /** Any click in the open chat screen invites while a ready party is still missing players. */
@@ -129,49 +130,50 @@ internal constructor(
             online() &&
                 party?.ready == true &&
                 invites.isEmpty() &&
-                (roster?.names?.size ?: 0) < 5 &&
+                (game.roster?.names?.size ?: 0) < 5 &&
                 time >= nextInvite
         )
-            requestRoster(time)
+            startRound(time)
     }
 
-    private fun requestRoster(time: Long) {
+    private fun startRound(time: Long) {
+        val current = party ?: return
+        nextInvite = time + 10_000
+        message("checking")
+        val known = game.roster
+        if (known != null) {
+            if (accepted(current, known)) report = PartyReport(current, known, current.invited)
+            nextPoll = 0
+            return
+        }
         requested = true
         parser.request(time)
         host.command("party list")
-        nextInvite = time + 10_000
         nextCommand = time + 1_000
-        message("checking")
     }
 
     fun chat(text: String) {
         if (!online()) return
         val listed = parser.receive(text, host.name, now())
+        if (listed != null) game.set(listed) else if (!game.receive(text, host.name)) return
         val current = party ?: return
-        if (!current.youLead) return
-        val updated =
-            listed
-                ?: roster
-                    ?.let { parser.membership(text, it) }
-                    ?.let { change ->
-                        if (change.roster == null) roster = null
-                        change.roster
-                    }
-                ?: return
-        if (!current.accepts(updated)) {
-            invites.clear()
-            report = null
-            requested = false
-            roster = null
-            if (status != "conflict") message("conflict")
-            status = "conflict"
-            return
-        }
-        roster = updated
+        if (!current.youLead || !current.full) return
+        val updated = game.roster ?: return
+        if (!accepted(current, updated)) return
         val action = if (listed != null && requested && current.ready) current.invited else null
         if (listed != null) requested = false
         report = PartyReport(current, updated, action)
         nextPoll = 0
+    }
+
+    private fun accepted(current: PartyHandoff, roster: GameRoster): Boolean {
+        if (current.accepts(roster)) return true
+        invites.clear()
+        report = null
+        requested = false
+        if (status != "conflict") message("conflict")
+        status = "conflict"
+        return false
     }
 
     fun sendChat(text: String) = relay.send(text)
@@ -261,7 +263,7 @@ internal constructor(
         activity = null
         report = null
         requested = false
-        roster = null
+        game.reset()
         invites.clear()
         parser.reset()
         nextPoll = 0
@@ -274,7 +276,6 @@ internal constructor(
             parser.reset()
             report = null
             requested = false
-            roster = null
         }
         // Invites only exist in reply to a user's own invite request (see updateParty).
         if (inGame && time >= nextCommand && invites.isNotEmpty()) {
@@ -311,7 +312,6 @@ internal constructor(
             invites.clear()
             parser.reset()
             requested = false
-            roster = null
         }
         if (party?.full == true && (previous?.full != true || handoff)) message("full")
         if (party?.ready == true && (previous?.ready != true || handoff)) message("ready")

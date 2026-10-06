@@ -137,12 +137,12 @@ class PartyClientTest {
             h.time += 10_000
             h.client.invite()
             assertEquals("checking", h.host.messages.last())
-            h.solo()
             h.tick()
             h.host.apply()
             h.time += 1000
             h.tick()
             assertEquals("p Gamma Epsilon", h.host.commands.last())
+            assertEquals(1, h.host.commands.count { it == "party list" })
             assertEquals(1, h.host.proofs)
             assertEquals(2, h.requests.count { it.first == "invite" })
         }
@@ -208,7 +208,7 @@ class PartyClientTest {
     }
 
     @Test
-    fun outsiderJoiningStopsTrackingAndDisbandingClearsTheRoster() {
+    fun outsiderInTheGamePartyBlocksInvitesUntilTheyLeave() {
         Harness().use { h ->
             h.poll()
             h.client.chatClicked()
@@ -221,15 +221,43 @@ class PartyClientTest {
             assertTrue(h.requests.none { it.first == "invite" || it.first == "roster" })
             h.time += 10_000
             h.client.chatClicked()
-            h.solo()
-            h.client.chat("[MVP+] Alpha has disbanded the party!")
-            h.client.chat("[VIP] Beta joined the party.")
+            assertEquals("conflict", h.client.status)
+            h.client.chat("[VIP] Outsider has left the party.")
+            h.time += 10_000
+            h.client.chatClicked()
             h.tick()
             h.host.apply()
+            assertEquals("invite", h.requests.last().first)
             assertEquals(
-                listOf("Alpha"),
+                listOf("Alpha", "Beta"),
                 h.requests.last().second.getAsJsonArray("members").map { it.asString },
             )
+            assertEquals(listOf("party list"), h.host.commands)
+        }
+    }
+
+    @Test
+    fun partyTrackedFromChatNeedsNoPartyListAndMustBeLed() {
+        Harness().use { h ->
+            h.poll()
+            h.client.chat("You have joined [MVP+] Beta's party!")
+            h.client.chat("You'll be partying with: [VIP] Gamma, Delta")
+            h.client.chatClicked()
+            assertEquals("conflict", h.client.status)
+            h.client.chat("The party was transferred to [MVP+] Alpha by [MVP+] Beta")
+            h.time += 10_000
+            h.client.chatClicked()
+            h.tick()
+            h.host.apply()
+            assertEquals("invite", h.requests.last().first)
+            assertEquals(
+                setOf("Alpha", "Beta", "Gamma", "Delta"),
+                h.requests.last().second.getAsJsonArray("members").map { it.asString }.toSet(),
+            )
+            h.time += 1000
+            h.tick()
+            assertTrue(h.host.commands.none { it == "party list" })
+            assertEquals(1, h.host.commands.count { it.startsWith("p ") })
         }
     }
 
