@@ -5,8 +5,15 @@ import com.google.gson.JsonParser
 
 private val NAME = Regex("[A-Za-z0-9_]{1,16}")
 private val ID = Regex("[A-Za-z0-9_-]{12}")
+private val UUID = Regex("[0-9a-f]{32}")
 
-data class PartyMember(val name: String, val online: Boolean, val accepted: Boolean)
+/** [uuid] is absent from older backends. */
+data class PartyMember(
+    val name: String,
+    val online: Boolean,
+    val accepted: Boolean,
+    val uuid: String? = null,
+)
 
 data class FinderActivity(val floor: String, val leader: String?, val members: Int)
 
@@ -74,6 +81,11 @@ object PartyProtocol {
                                 name(member.get("name").asString),
                                 boolean(member, "online"),
                                 boolean(member, "accepted"),
+                                member
+                                    .get("uuid")
+                                    ?.takeUnless { it.isJsonNull }
+                                    ?.asString
+                                    ?.also { require(UUID.matches(it)) },
                             )
                         }
                     require(

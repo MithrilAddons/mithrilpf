@@ -25,7 +25,7 @@ MithrilPF is a Fabric mod for Hypixel SkyBlock that makes finding dungeon partie
 
 ## Installation
 
-Requires **Minecraft 26.1.2**, **Fabric Loader**, **Fabric API**, and **Fabric Language Kotlin**.
+Requires **Minecraft 26.1.2**, **Fabric Loader**, **Fabric API**, **Fabric Language Kotlin**, and **[Hypixel Mod API](https://modrinth.com/mod/hypixel-mod-api)**.
 
 1. Download the newest mod JAR from [GitHub Releases](https://github.com/MithrilAddons/mithrilpf/releases), including prereleases while the mod is in beta.
 2. Place it in your instance's `mods` folder alongside the required dependencies.

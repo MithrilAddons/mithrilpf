@@ -14,6 +14,7 @@ import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.FinderNavigation
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
+import java.util.UUID
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
@@ -24,6 +25,8 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
+import net.hypixel.modapi.HypixelModAPI
+import net.hypixel.modapi.packet.impl.clientbound.ClientboundPartyInfoPacket
 import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ChatScreen
@@ -78,6 +81,14 @@ object MithrilPF : ClientModInitializer {
             if (!overlay) parties.chat(message.string)
             true
         }
+        HypixelModAPI.getInstance()
+            .createHandler(ClientboundPartyInfoPacket::class.java) { packet ->
+                fun hex(uuid: UUID) = uuid.toString().replace("-", "")
+                val leader = packet.leader.orElse(null)?.let(::hex)
+                val members = if (packet.isInParty) packet.members.map(::hex).toSet() else setOf()
+                client.execute { parties.partyInfo(leader, members) }
+            }
+            .onError { client.execute { parties.partyInfoFailed() } }
         ScreenEvents.AFTER_INIT.register { _, screen, _, _ ->
             if (screen is ChatScreen)
                 ScreenMouseEvents.afterMouseClick(screen).register { _, _, consumed ->

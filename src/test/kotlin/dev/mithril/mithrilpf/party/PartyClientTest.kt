@@ -23,6 +23,8 @@ class PartyClientTest {
         val commands = mutableListOf<String>()
         val messages = mutableListOf<String>()
         var proofs = 0
+        var infoRequests = 0
+        var infoAvailable = true
 
         override fun proof(): (String) -> Unit = { proofs++ }
 
@@ -32,6 +34,11 @@ class PartyClientTest {
 
         override fun command(command: String) {
             commands += command
+        }
+
+        override fun requestPartyInfo(): Boolean {
+            infoRequests++
+            return infoAvailable
         }
 
         override fun message(key: String) {
@@ -104,36 +111,62 @@ class PartyClientTest {
             host.apply()
         }
 
-        fun solo() {
-            client.chat("You are not currently in a party.")
+        /** Hypixel Mod API answers; names map to the fixture's UUIDs (Outsider is not listed). */
+        fun info(leader: String?, vararg names: String) {
+            val ids =
+                mapOf(
+                    "Alpha" to 'a',
+                    "Beta" to 'b',
+                    "Gamma" to 'c',
+                    "Delta" to 'd',
+                    "Epsilon" to 'e',
+                )
+            fun uuid(name: String) = (ids[name] ?: 'f').toString().repeat(32)
+            client.partyInfo(leader?.let(::uuid), names.map(::uuid).toSet())
+        }
+
+        fun solo() = info(null)
+
+        /** Reads the party through the Mod API, then one click invites everyone. */
+        fun inviteRound() {
+            poll()
+            tick()
+            solo()
+            client.chatClicked()
+            tick()
+            host.apply()
+            time += 1000
+            tick()
         }
 
         override fun close() = client.close()
     }
 
     @Test
-    fun chatClickChecksPartyThenInvitesAllFourAndRetriesOnlyMissingPlayers() {
+    fun chatClickInvitesAllFourAndRetriesOnlyMissingPlayers() {
         Harness().use { h ->
             h.poll()
             assertEquals("connected", h.client.status)
             assertEquals(listOf("reserved", "full", "ready"), h.host.messages)
             h.tick()
+            assertEquals(1, h.host.infoRequests)
+            assertTrue(h.host.commands.isEmpty())
+            h.solo()
+            h.tick()
+            h.host.apply()
+            assertEquals("roster", h.requests.last().first)
             assertTrue(h.host.commands.isEmpty())
             h.client.chatClicked()
-            assertEquals(listOf("party list"), h.host.commands)
-            h.solo()
             h.tick()
             h.host.apply()
             h.time += 1000
             h.tick()
-            assertEquals("p Beta Gamma Delta Epsilon", h.host.commands.last())
+            assertEquals(listOf("p Beta Gamma Delta Epsilon"), h.host.commands)
             h.tick()
-            assertEquals(1, h.host.commands.count { it.startsWith("p ") })
             h.missing = listOf("Gamma", "Epsilon")
             h.client.chatClicked()
             h.client.invite()
             assertEquals("cooldown", h.host.messages.last())
-            assertEquals(1, h.host.commands.count { it == "party list" })
             h.time += 10_000
             h.client.invite()
             assertEquals("checking", h.host.messages.last())
@@ -141,8 +174,8 @@ class PartyClientTest {
             h.host.apply()
             h.time += 1000
             h.tick()
-            assertEquals("p Gamma Epsilon", h.host.commands.last())
-            assertEquals(1, h.host.commands.count { it == "party list" })
+            assertEquals(listOf("p Beta Gamma Delta Epsilon", "p Gamma Epsilon"), h.host.commands)
+            assertEquals(1, h.host.infoRequests)
             assertEquals(1, h.host.proofs)
             assertEquals(2, h.requests.count { it.first == "invite" })
         }
@@ -158,6 +191,7 @@ class PartyClientTest {
                 h.time += 10_000
                 h.tick()
             }
+            assertTrue(h.host.infoRequests in 2..5)
             h.response.getAsJsonObject("party").addProperty("invited", true)
             h.response.add("invite", JsonArray().apply { h.missing.forEach(::add) })
             h.poll()
@@ -171,15 +205,69 @@ class PartyClientTest {
     }
 
     @Test
-    fun joinAndLeaveLinesTrackTheRosterUntilEveryoneJoined() {
+    fun clickWhilePartyIsUnknownWaitsForTheModApiAndResolvesUuids() {
         Harness().use { h ->
             h.poll()
+            h.tick()
             h.client.chatClicked()
+            assertEquals(1, h.host.infoRequests)
+            h.info("Alpha", "Alpha", "Beta", "Outsider")
+            assertEquals("conflict", h.client.status)
+            h.time += 60_000
+            h.client.chatClicked()
+            assertEquals(2, h.host.infoRequests)
+            h.info("Alpha", "Alpha", "Beta")
+            h.tick()
+            h.host.apply()
+            assertEquals("invite", h.requests.last().first)
+            assertEquals(
+                listOf("Alpha", "Beta"),
+                h.requests.last().second.getAsJsonArray("members").map { it.asString },
+            )
+            h.time += 1000
+            h.tick()
+            assertEquals(listOf("p Beta Gamma Delta Epsilon"), h.host.commands)
+        }
+    }
+
+    @Test
+    fun unansweredOrRejectedModApiRequestsEndThePendingClick() {
+        Harness().use { h ->
+            h.poll()
+            h.tick()
+            h.client.chatClicked()
+            h.time += 11_000
+            h.tick()
+            assertEquals("party_unknown", h.host.messages.last())
+            h.time += 60_000
+            h.client.chatClicked()
+            h.client.partyInfoFailed()
+            assertEquals("party_unknown", h.host.messages.last())
+            h.solo() // A late answer only updates the party; the click already ended.
+            h.tick()
+            h.host.apply()
+            assertTrue(h.requests.none { it.first == "invite" })
+            h.host.infoAvailable = false
+            h.host.connection = Any() // A reconnect forgets the game party.
+            h.time += 60_000
+            h.tick()
+            h.host.apply()
+            h.client.chatClicked()
+            h.host.infoAvailable = true
+            h.time += 5_000
+            h.tick()
             h.solo()
             h.tick()
             h.host.apply()
-            h.time += 1000
-            h.tick()
+            assertEquals("invite", h.requests.last().first)
+            assertTrue(h.host.commands.none { !it.startsWith("p ") })
+        }
+    }
+
+    @Test
+    fun joinAndLeaveLinesTrackTheRosterUntilEveryoneJoined() {
+        Harness().use { h ->
+            h.inviteRound()
             for (line in
                 listOf(
                     "§b[MVP§c+§b] Beta §ejoined the party.",
@@ -203,7 +291,7 @@ class PartyClientTest {
             h.host.apply()
             assertEquals("roster", h.requests.last().first)
             assertEquals(5, h.requests.last().second.getAsJsonArray("members").size())
-            assertEquals(listOf("party list", "p Beta Gamma Delta Epsilon"), h.host.commands)
+            assertEquals(listOf("p Beta Gamma Delta Epsilon"), h.host.commands)
         }
     }
 
@@ -211,7 +299,7 @@ class PartyClientTest {
     fun outsiderInTheGamePartyBlocksInvitesUntilTheyLeave() {
         Harness().use { h ->
             h.poll()
-            h.client.chatClicked()
+            h.tick()
             h.solo()
             h.client.chat("[VIP] Outsider joined the party.")
             assertEquals("conflict", h.client.status)
@@ -232,12 +320,12 @@ class PartyClientTest {
                 listOf("Alpha", "Beta"),
                 h.requests.last().second.getAsJsonArray("members").map { it.asString },
             )
-            assertEquals(listOf("party list"), h.host.commands)
+            assertTrue(h.host.commands.isEmpty())
         }
     }
 
     @Test
-    fun partyTrackedFromChatNeedsNoPartyListAndMustBeLed() {
+    fun partyTrackedFromChatNeedsNoModApiAndMustBeLed() {
         Harness().use { h ->
             h.poll()
             h.client.chat("You have joined [MVP+] Beta's party!")
@@ -256,8 +344,8 @@ class PartyClientTest {
             )
             h.time += 1000
             h.tick()
-            assertTrue(h.host.commands.none { it == "party list" })
-            assertEquals(1, h.host.commands.count { it.startsWith("p ") })
+            assertEquals(0, h.host.infoRequests)
+            assertEquals(listOf("p Beta Gamma Delta Epsilon"), h.host.commands)
         }
     }
 
@@ -267,8 +355,8 @@ class PartyClientTest {
             h.poll("native")
             assertFalse("reserved" in h.host.messages)
             h.tick("native")
-            h.client.chatClicked()
             h.solo()
+            h.client.chatClicked()
             h.tick("native")
             val pending = assertNotNull(h.host.callbacks.poll(5, TimeUnit.SECONDS))
             h.client.tick("native", true)
@@ -276,16 +364,17 @@ class PartyClientTest {
             h.time += 1000
             h.client.tick("native", true)
             assertNull(h.client.party)
-            assertTrue(h.host.commands.none { it.startsWith("p ") })
+            assertTrue(h.host.commands.isEmpty())
         }
     }
 
     @Test
-    fun accountOrConnectionSwitchDiscardsQueuedInvite() {
+    fun accountOrConnectionSwitchDiscardsQueuedInviteAndPartyState() {
         Harness().use { h ->
             h.poll()
-            h.client.chatClicked()
+            h.tick()
             h.solo()
+            h.client.chatClicked()
             h.tick()
             h.host.apply()
             h.host.connection = null
@@ -293,7 +382,7 @@ class PartyClientTest {
             h.time += 1000
             h.tick()
             h.host.apply()
-            assertTrue(h.host.commands.none { it.startsWith("p ") })
+            assertTrue(h.host.commands.isEmpty())
             h.host.uuid = "b".repeat(32)
             h.tick()
             h.host.apply()
@@ -303,24 +392,21 @@ class PartyClientTest {
     }
 
     @Test
-    fun outsiderRosterBlocksInvitesAndMembersNeverRunLeaderCommands() {
+    fun outsiderFromTheModApiBlocksInvitesAndMembersNeverRunLeaderCommands() {
         Harness().use { h ->
             h.client.invite()
             assertEquals("not_ready", h.host.messages.last())
             h.poll()
-            h.client.chatClicked()
-            h.client.chat("Party Members (2)")
-            h.client.chat("Party Leader: Alpha ●")
-            h.client.chat("Party Members: Outsider ●")
+            h.info("Alpha", "Alpha", "Outsider")
             assertEquals("conflict", h.client.status)
+            h.client.chatClicked()
             assertTrue(h.requests.none { it.first == "invite" })
             h.response.getAsJsonObject("party").addProperty("you_lead", false)
             h.poll()
-            h.host.commands.clear()
             h.tick()
             h.client.chatClicked()
-            assertTrue(h.host.commands.isEmpty())
             h.client.invite()
+            assertTrue(h.host.commands.isEmpty())
             assertEquals("not_ready", h.host.messages.last())
         }
     }
@@ -329,10 +415,7 @@ class PartyClientTest {
     fun completedRosterClearsPartyAndReportsCompletion() {
         Harness().use { h ->
             h.poll()
-            h.client.chatClicked()
-            h.client.chat("Party Members (5)")
-            h.client.chat("Party Leader: Alpha ●")
-            h.client.chat("Party Members: Beta ● Gamma ● Delta ● Epsilon ●")
+            h.info("Alpha", "Alpha", "Beta", "Gamma", "Delta", "Epsilon")
             h.response.add("party", com.google.gson.JsonNull.INSTANCE)
             h.tick()
             h.host.apply()
@@ -374,13 +457,16 @@ class PartyClientTest {
     }
 
     @Test
-    fun foreignServersCannotSendInvitesAndGenerationChangesResetRoster() {
+    fun foreignServersCannotSendInvitesAndGenerationChangesDropPendingClicks() {
         Harness().use { h ->
             h.poll()
+            h.tick()
             h.client.chatClicked()
             h.response.getAsJsonObject("party").addProperty("handoff_id", "batch0000002")
             h.poll()
-            h.solo() // The roster request from the previous generation is no longer valid.
+            h.solo() // The click belonged to the previous generation.
+            h.tick()
+            h.host.apply()
             assertTrue(h.requests.none { it.first == "invite" })
             for (server in listOf(null, "hypixel.net.evil.invalid", "localhost")) {
                 h.host.server = server

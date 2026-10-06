@@ -42,7 +42,7 @@ class GamePartyTrackerTest {
             "Alpha",
         )
         tracker.receive("Gamma has been removed from the party.", "Alpha")
-        tracker.receive("[MVP++] Delta has left the party.", "Alpha")
+        tracker.receive("Kicked [MVP++] Delta because they were offline.", "Alpha")
         tracker.receive("The party was transferred to [VIP] Epsilon by [MVP+] Alpha", "Alpha")
         assertEquals(GameRoster("Epsilon", listOf("Alpha", "Epsilon")), tracker.roster)
         tracker.receive(

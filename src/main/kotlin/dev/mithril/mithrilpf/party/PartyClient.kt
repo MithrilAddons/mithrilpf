@@ -27,6 +27,11 @@ internal interface PartyHost {
 
     fun command(command: String)
 
+    /**
+     * Asks Hypixel's Mod API for the party; false when it cannot be sent yet. Not a chat command.
+     */
+    fun requestPartyInfo(): Boolean
+
     fun message(key: String)
 
     fun chatMessage(message: PartyChatMessage)
@@ -71,7 +76,6 @@ internal constructor(
                 nextPoll = 0
             },
         )
-    private val parser = PartyRosterParser()
     private val game = GamePartyTracker()
     private val invites = ArrayDeque<String>()
     private var pending: Future<*>? = null
@@ -85,7 +89,9 @@ internal constructor(
     private var nextCommand = 0L
     private var nextInvite = 0L
     private var report: PartyReport? = null
-    private var requested = false
+    private var roundPending = false
+    private var infoSent: Long? = null
+    private var nextInfo = 0L
     private var failures = 0
     var party: PartyHandoff? = null
         private set
@@ -107,8 +113,8 @@ internal constructor(
 
     /**
      * Hypixel commands only follow a user action: this click, command or button reports the tracked
-     * game party, and the server's reply may add one /p for missing players. Only when the game
-     * party is unknown (after a launch or reconnect) does it first send one /party list.
+     * game party, and the server's reply may add one /p for missing players. An unknown game party
+     * (after a launch or reconnect) is first read through Hypixel's Mod API, never a chat command.
      */
     fun invite() {
         val time = now()
@@ -137,43 +143,65 @@ internal constructor(
     }
 
     private fun startRound(time: Long) {
-        val current = party ?: return
         nextInvite = time + 10_000
         message("checking")
-        val known = game.roster
-        if (known != null) {
-            if (accepted(current, known)) report = PartyReport(current, known, current.invited)
-            nextPoll = 0
-            return
-        }
-        requested = true
-        parser.request(time)
-        host.command("party list")
-        nextCommand = time + 1_000
+        // Players only known by UUID may have left since; ask Hypixel again rather than guess.
+        if (game.roster?.names?.any { it.startsWith(UNRESOLVED) } == true) game.reset()
+        if (game.roster != null) return reportRoster(true)
+        roundPending = true
+        if (infoSent == null && time >= nextInfo) requestInfo(time)
     }
 
     fun chat(text: String) {
-        if (!online()) return
-        val listed = parser.receive(text, host.name, now())
-        if (listed != null) game.set(listed) else if (!game.receive(text, host.name)) return
-        val current = party ?: return
-        if (!current.youLead || !current.full) return
-        val updated = game.roster ?: return
-        if (!accepted(current, updated)) return
-        val action = if (listed != null && requested && current.ready) current.invited else null
-        if (listed != null) requested = false
-        report = PartyReport(current, updated, action)
-        nextPoll = 0
+        if (online() && game.receive(text, host.name)) reportRoster(false)
     }
 
-    private fun accepted(current: PartyHandoff, roster: GameRoster): Boolean {
-        if (current.accepts(roster)) return true
-        invites.clear()
-        report = null
-        requested = false
-        if (status != "conflict") message("conflict")
-        status = "conflict"
-        return false
+    /** Hypixel's Mod API answer, including answers to other mods' requests. Empty: no party. */
+    fun partyInfo(leader: String?, members: Set<String>) {
+        infoSent = null
+        if (!online()) return
+        val known = party?.members.orEmpty()
+        fun name(uuid: String) =
+            if (uuid == host.uuid) host.name
+            else known.firstOrNull { it.uuid == uuid }?.name ?: "$UNRESOLVED$uuid"
+        game.set(
+            if (members.isEmpty()) GameRoster(host.name, listOf(host.name))
+            else GameRoster(leader?.let(::name) ?: UNRESOLVED, members.map(::name))
+        )
+        val round = roundPending
+        roundPending = false
+        reportRoster(round)
+    }
+
+    fun partyInfoFailed() {
+        infoSent = null
+        if (roundPending) message("party_unknown")
+        roundPending = false
+    }
+
+    private fun requestInfo(time: Long) {
+        if (host.requestPartyInfo()) {
+            infoSent = time
+            nextInfo = time + 60_000 // Matches common Mod API use; Hypixel rate limits requests.
+        } else nextInfo = time + 5_000
+    }
+
+    /** A user action ([round]) may invite; other roster changes only report who has joined. */
+    private fun reportRoster(round: Boolean) {
+        val current = party ?: return
+        if (!current.youLead || !current.full) return
+        val roster = game.roster ?: return
+        if (!current.accepts(roster)) {
+            invites.clear()
+            report = null
+            if (status != "conflict") message("conflict")
+            status = "conflict"
+            return
+        }
+        val pending = report?.takeIf { it.party.generation == current.generation }?.retry
+        val action = if (round && current.ready) current.invited else pending
+        report = PartyReport(current, roster, action)
+        nextPoll = 0
     }
 
     fun sendChat(text: String) = relay.send(text)
@@ -262,10 +290,11 @@ internal constructor(
         party = null
         activity = null
         report = null
-        requested = false
+        roundPending = false
+        infoSent = null
+        nextInfo = 0
         game.reset()
         invites.clear()
-        parser.reset()
         nextPoll = 0
     }
 
@@ -273,10 +302,19 @@ internal constructor(
         val current = party
         if (!inGame) {
             invites.clear()
-            parser.reset()
             report = null
-            requested = false
+            roundPending = false
         }
+        infoSent?.let { if (time - it > 10_000) partyInfoFailed() }
+        if (
+            inGame &&
+                current?.youLead == true &&
+                current.full &&
+                game.roster == null &&
+                infoSent == null &&
+                time >= nextInfo
+        )
+            requestInfo(time)
         // Invites only exist in reply to a user's own invite request (see updateParty).
         if (inGame && time >= nextCommand && invites.isNotEmpty()) {
             if (current?.youLead == true && current.invited) {
@@ -310,8 +348,7 @@ internal constructor(
         val handoff = previous?.generation != party?.generation
         if (handoff) {
             invites.clear()
-            parser.reset()
-            requested = false
+            roundPending = false
         }
         if (party?.full == true && (previous?.full != true || handoff)) message("full")
         if (party?.ready == true && (previous?.ready != true || handoff)) message("ready")
@@ -339,5 +376,10 @@ internal constructor(
         pending?.cancel(true)
         worker.shutdownNow()
         invites.clear()
+    }
+
+    private companion object {
+        /** Marks a game party member Hypixel named only by UUID; never a valid player name. */
+        const val UNRESOLVED = "#"
     }
 }

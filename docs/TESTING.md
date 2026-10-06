@@ -90,8 +90,8 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
 - Sync an existing and improved PB; check account separation, restart, logout and
   temporary failure. Compare the website card. Room/history data must stay local.
 - With five accounts, verify no command is sent until the leader clicks in chat, that
-  one click sends one `/p` (preceded by `/party list` only right after launching or
-  reconnecting), missing-player re-invites, the ten-second cooldown, no-show removal,
+  one click sends only one `/p` (also right after launching or reconnecting, when the
+  party comes from the Mod API), missing-player re-invites, the ten-second cooldown, no-show removal,
   leadership changes, a pre-existing party, and completion from join messages only after
   all game members join.
   Test conflicting parties, hidden chat, reconnects and backend restart.

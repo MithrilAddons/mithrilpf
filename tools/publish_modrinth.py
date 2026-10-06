@@ -21,6 +21,7 @@ API = "https://api.modrinth.com/v2"
 DEPENDENCIES = [
     {"project_id": "P7dR8mSH", "dependency_type": "required"},  # Fabric API
     {"project_id": "Ha28R6CL", "dependency_type": "required"},  # Fabric Language Kotlin
+    {"project_id": "1A2mKfBx", "dependency_type": "required"},  # Hypixel Mod API
     {"project_id": "mOgUt4GM", "dependency_type": "optional"},  # Mod Menu
 ]
 

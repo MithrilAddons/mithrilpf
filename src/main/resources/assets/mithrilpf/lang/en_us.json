@@ -22,6 +22,7 @@
   "party.mithrilpf.unlinked": "Party finder: link your browser first",
   "party.mithrilpf.unavailable": "Party finder: unavailable, retrying",
   "party.mithrilpf.not_ready": "MithrilPF: nothing to invite yet. Everyone must be online on Hypixel first.",
+  "party.mithrilpf.party_unknown": "MithrilPF: Hypixel did not report your party. Try again in a minute.",
   "party.mithrilpf.cooldown": "MithrilPF: wait a few seconds before inviting again.",
   "party.mithrilpf.ready": "MithrilPF: everyone is online. Open chat and click anywhere (or use /mpfinvite) to check your party and invite.",
   "party.mithrilpf.checking": "MithrilPF: checking party members…",

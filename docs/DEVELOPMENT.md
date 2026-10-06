@@ -1,7 +1,8 @@
 # Development
 
 MithrilPF is a standalone Fabric client for Minecraft 26.1.2. Required dependencies
-are Fabric Loader, Fabric API and Fabric Language Kotlin; Mod Menu is optional.
+are Fabric Loader, Fabric API, Fabric Language Kotlin and Hypixel's Mod API; Mod Menu
+is optional.
 
 Original MithrilPF code is licensed under [MIT](../LICENSE).
 Third-party licenses are documented in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)
@@ -10,8 +11,10 @@ and included in the gameplay JAR.
 ## Install the beta
 
 1. Use Minecraft **26.1.2**, Java **25**, and Fabric Loader **0.19.3 or newer**.
-2. Install Fabric API **0.154.2+26.1.2 or newer for this Minecraft version** and
-   Fabric Language Kotlin **1.13.12+kotlin.2.4.0 or newer** in the instance's `mods` folder.
+2. Install Fabric API **0.154.2+26.1.2 or newer for this Minecraft version**,
+   Fabric Language Kotlin **1.13.12+kotlin.2.4.0 or newer** and
+   [Hypixel Mod API](https://modrinth.com/mod/hypixel-mod-api) **1.0.2 or newer** in the
+   instance's `mods` folder. Automatic updates never install it for you.
 3. Download the gameplay JAR from the
    [GitHub releases](https://github.com/MithrilAddons/mithrilpf/releases), remove
    any older MithrilPF JAR from `mods`, and put the new one there. Do not install
@@ -111,8 +114,8 @@ create releases.
 
 Publishing a GitHub release triggers **Publish to Modrinth**, including prereleases.
 It uploads the existing gameplay JAR and release notes, verifies SHA256SUMS and the
-official-build marker, and reads Minecraft compatibility from the JAR. Fabric API
-and Fabric Language Kotlin are required dependencies; Mod Menu is optional.
+official-build marker, and reads Minecraft compatibility from the JAR. Fabric API,
+Fabric Language Kotlin and Hypixel Mod API are required dependencies; Mod Menu is optional.
 Stable versions use Modrinth's Release channel, `-alpha.N` uses Alpha, and
 `-beta.N` / `-rc.N` use Beta. Draft GitHub releases are not uploaded.
 
@@ -266,8 +269,9 @@ disbands and "You'll be partying with"); this state is not saved across launches
 are online, the leader opens chat and clicks anywhere (or uses `/mpfinvite`, also
 `/mithrilpfinvite`/`/mithrilpfreinvite`, or the finder screen's button). The click reports the
 tracked party and the server's answer adds one `/p name1 name2 name3 name4` for players still
-missing. Only when the party is unknown after a launch or reconnect does the click first send one
-`/party list`. Later clicks re-invite only missing players, at most once every ten seconds, and
+missing. When the party is unknown after a launch or reconnect, the mod asks Hypixel's Mod API
+for it (at most once a minute, only while you lead a full finder party) instead of sending a
+command; a click made meanwhile completes when the answer arrives. Later clicks re-invite only missing players, at most once every ten seconds, and
 the listing closes once all five have joined. Conflicting game parties stop invites; the mod never
 kicks, disbands or leaves automatically. The canonical protocol
 lives in the web repository's

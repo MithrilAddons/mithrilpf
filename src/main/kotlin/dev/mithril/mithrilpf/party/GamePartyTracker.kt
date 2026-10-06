@@ -40,7 +40,7 @@ class GamePartyTracker {
                 )
             )
         }
-        LEFT.matchEntire(text)?.let {
+        (LEFT.matchEntire(text) ?: KICKED_OFFLINE.matchEntire(text))?.let {
             return update(current.copy(names = current.names.without(it.groupValues[1])))
         }
         TRANSFERRED.matchEntire(text)?.let {
@@ -84,6 +84,7 @@ class GamePartyTracker {
                 "$RANK$NAME (?:has left the party|has been removed from the party|" +
                     "was removed from (?:the|your) party because they disconnected)\\."
             )
+        val KICKED_OFFLINE = Regex("Kicked $RANK$NAME because they were offline\\.")
         val TRANSFERRED =
             Regex("The party was transferred to $RANK$NAME (by|because) $RANK$NAME(?: left)?")
     }
