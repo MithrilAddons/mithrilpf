@@ -96,7 +96,7 @@ class ModUpdates(private val client: Minecraft, firstRun: Boolean) : AutoCloseab
                 client.player?.sendSystemMessage(
                     Component.translatable("update.mithrilpf.available_notice", status.version)
                 )
-            UpdatePrompts.Show.NONE -> {}
+            UpdatePrompts.Show.NONE -> Unit
         }
     }
 
