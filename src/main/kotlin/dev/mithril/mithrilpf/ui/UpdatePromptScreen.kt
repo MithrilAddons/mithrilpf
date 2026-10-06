@@ -22,103 +22,69 @@ class UpdatePromptScreen(private val parent: Screen, private val updates: ModUpd
 
     override fun init() {
         shown = updates.status
-        val width = (this.width - 16).coerceIn(1, 420)
-        val height = (this.height - 16).coerceIn(1, 260)
-        panel = PanelLayout((this.width - width) / 2, (this.height - height) / 2, width, height)
-        val top = panel.y + 38
-        val bottom = panel.y + panel.height - 12
-        val wide = panel.width >= 320
-        val columnWidth = if (wide) 128 else panel.width - 24
-        val status = statusMessage()
-        statusLines = status?.let { font.split(it, columnWidth) }.orEmpty()
-        val actions = actions()
-        val links = if (shown.release != null) 2 else 0
+        panel = UpdatePromptModel.panel(width, height)
+        val status =
+            UpdatePromptModel.statusKey(shown.state)?.let {
+                Component.translatable(it, shown.version, shown.unmet.joinToString(", "))
+            }
+        statusLines = status?.let { font.split(it, UpdatePromptModel.columnWidth(panel)) }.orEmpty()
+        val actions = UpdatePromptModel.actions(shown.state)
+        val release = shown.release
         val statusHeight = if (statusLines.isEmpty()) 0 else statusLines.size * 10 + 6
-        val buttonsHeight = (actions.size + links) * 24 + (if (links > 0) 8 else 0)
-        column =
-            if (wide)
-                PanelLayout(
-                    panel.x + panel.width - 12 - columnWidth,
-                    top,
-                    columnWidth,
-                    bottom - top,
-                )
-            else {
-                val height = (statusHeight + buttonsHeight).coerceAtMost(bottom - top - 40)
-                PanelLayout(panel.x + 12, bottom - height, columnWidth, height)
-            }
-        notes =
-            if (wide) PanelLayout(panel.x + 12, top, column.x - 12 - panel.x - 12, bottom - top)
-            else PanelLayout(panel.x + 12, top, panel.width - 24, column.y - 8 - top)
-        var y = column.y + statusHeight
-        for ((label, primary, danger, action) in actions) {
-            addRenderableWidget(
-                FlatButton(column.x, y, column.width, label, primary, action).also {
-                    it.danger = danger
-                }
+        val layout =
+            UpdatePromptModel.layout(
+                panel,
+                statusHeight,
+                actions.size,
+                if (release != null) 2 else 0,
             )
-            y += 24
+        notes = layout.notes
+        column = layout.column
+        actions.forEachIndexed { index, action ->
+            addRenderableWidget(
+                FlatButton(
+                        column.x,
+                        layout.firstButton + index * 24,
+                        column.width,
+                        Component.translatable(action.key),
+                        action.primary,
+                    ) {
+                        run(action)
+                    }
+                    .also { it.danger = action.danger }
+            )
         }
-        shown.release?.let { release ->
-            var link = if (wide) column.y + column.height - 48 else y + 8
-            for ((key, uri) in listOf("github" to release.page, "modrinth" to MODRINTH)) {
+        if (release != null)
+            listOf("github" to release.page, "modrinth" to MODRINTH).forEachIndexed {
+                index,
+                (key, uri) ->
                 addRenderableWidget(
-                    FlatButton(column.x, link, column.width, message(key)) { open(uri) }
+                    FlatButton(
+                        column.x,
+                        layout.firstLink + index * 24,
+                        column.width,
+                        message(key),
+                    ) {
+                        open(uri)
+                    }
                 )
-                link += 24
             }
-        }
         lines = noteLines()
         scroll = scroll.coerceIn(0, maxScroll())
     }
 
-    private data class Action(
-        val label: Component,
-        val primary: Boolean,
-        val danger: Boolean,
-        val run: () -> Unit,
-    )
-
-    private fun actions(): List<Action> =
-        when (shown.state) {
-            "available",
-            "skipped" ->
-                listOfNotNull(
-                    Action(message("install"), true, false) { updates.install() },
-                    Action(message("remind"), false, false) { onClose() },
-                    if (shown.state == "available")
-                        Action(message("skip"), false, true) {
-                            updates.skip()
-                            minecraft.setScreen(parent)
-                        }
-                    else null,
-                )
-            "downloading",
-            "ready" ->
-                listOf(
-                    Action(message("cancel_install"), false, false) { updates.cancel() },
-                    Action(Component.translatable("gui.done"), false, false) { onClose() },
-                )
-            "dependencies" ->
-                listOf(
-                    Action(message("install_all"), true, false) {
-                        updates.installWithDependencies()
-                    },
-                    Action(Component.translatable("gui.done"), false, false) { onClose() },
-                )
-            "failed" ->
-                listOf(
-                    Action(message("retry"), true, false) { updates.install() },
-                    Action(Component.translatable("gui.done"), false, false) { onClose() },
-                )
-            else -> listOf(Action(Component.translatable("gui.done"), false, false) { onClose() })
-        }
-
-    private fun statusMessage(): Component? =
-        when (shown.state) {
-            "available",
-            "skipped" -> null
-            else -> message(shown.state, shown.version, shown.unmet.joinToString(", "))
+    private fun run(action: UpdatePromptModel.Action) =
+        when (action) {
+            UpdatePromptModel.Action.INSTALL,
+            UpdatePromptModel.Action.RETRY -> updates.install()
+            UpdatePromptModel.Action.INSTALL_ALL -> updates.installWithDependencies()
+            UpdatePromptModel.Action.CANCEL -> updates.cancel()
+            UpdatePromptModel.Action.SKIP -> {
+                updates.skip()
+                minecraft.setScreen(parent)
+            }
+            UpdatePromptModel.Action.REMIND,
+            UpdatePromptModel.Action.DONE -> onClose()
         }
 
     /** One wrapped notes line; [bullet] marks the first line of a bullet point. */

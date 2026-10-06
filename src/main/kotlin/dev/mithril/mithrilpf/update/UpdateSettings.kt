@@ -38,7 +38,7 @@ class UpdateSettingsStore(private val path: Path) {
         val skipped =
             root["skipped"]?.let {
                 require(it.isJsonPrimitive && it.asJsonPrimitive.isString)
-                it.asString.also { text -> require(ReleaseVersion.parse(text) != null) }
+                it.asString.also { text -> requireNotNull(ReleaseVersion.parse(text)) }
             }
         return UpdateSettings(
             bool("enabled", true),

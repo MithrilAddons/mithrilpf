@@ -11,10 +11,7 @@ import net.minecraft.network.chat.Component
 /** Opens the first-run choice and update prompt over the title screen, never during play. */
 class ModUpdates(private val client: Minecraft, firstRun: Boolean) : AutoCloseable {
     private val service: UpdateService
-    private var askedThisLaunch = false
-    private var prompted = ""
-    private var announced = ""
-    private var dismissed = ""
+    private val prompts = UpdatePrompts()
     val status: UpdateStatus
         get() = service.status
 
@@ -86,34 +83,20 @@ class ModUpdates(private val client: Minecraft, firstRun: Boolean) : AutoCloseab
     fun skip() = service.skip()
 
     /** "Remind me later": no prompt for this version until the next launch. */
-    fun remindLater() {
-        dismissed = status.version
-    }
+    fun remindLater() = prompts.remindLater(status.version)
 
     fun tick() {
-        val status = status
-        val screen = client.screen
-        if (screen is TitleScreen) {
-            if (status.state == "ask" && !askedThisLaunch) {
-                askedThisLaunch = true
-                client.setScreen(UpdateOptInScreen(screen, this))
-            } else if (
-                status.state == "available" &&
-                    status.version != dismissed &&
-                    status.version != prompted
-            ) {
-                prompted = status.version
-                client.setScreen(UpdatePromptScreen(screen, this))
-            }
-        } else if (
-            client.player != null &&
-                status.state == "available" &&
-                status.version !in setOf(announced, prompted, dismissed)
-        ) {
-            announced = status.version
-            client.player?.sendSystemMessage(
-                Component.translatable("update.mithrilpf.available_notice", status.version)
-            )
+        val title = client.screen as? TitleScreen
+        when (prompts.next(status, title != null, client.player != null)) {
+            UpdatePrompts.Show.OPT_IN ->
+                title?.let { client.setScreen(UpdateOptInScreen(it, this)) }
+            UpdatePrompts.Show.PROMPT ->
+                title?.let { client.setScreen(UpdatePromptScreen(it, this)) }
+            UpdatePrompts.Show.NOTICE ->
+                client.player?.sendSystemMessage(
+                    Component.translatable("update.mithrilpf.available_notice", status.version)
+                )
+            UpdatePrompts.Show.NONE -> {}
         }
     }
 
