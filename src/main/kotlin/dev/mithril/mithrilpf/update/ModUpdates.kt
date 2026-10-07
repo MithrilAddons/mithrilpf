@@ -1,15 +1,21 @@
 package dev.mithril.mithrilpf.update
 
+import dev.mithril.mithrilpf.ui.UpdateOptInScreen
+import dev.mithril.mithrilpf.ui.UpdatePromptScreen
 import java.nio.file.Path
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.TitleScreen
 import net.minecraft.network.chat.Component
 
-class ModUpdates(private val client: Minecraft) : AutoCloseable {
+/** Opens the first-run choice and update prompt over the title screen, never during play. */
+class ModUpdates(private val client: Minecraft, firstRun: Boolean) : AutoCloseable {
     private val service: UpdateService
-    private var notifiedVersion = ""
+    private val prompts = UpdatePrompts()
     val status: UpdateStatus
         get() = service.status
+
+    val installedVersion: String
 
     val cooldownSeconds: Long
         get() = service.cooldownSeconds
@@ -17,6 +23,7 @@ class ModUpdates(private val client: Minecraft) : AutoCloseable {
     init {
         val loader = FabricLoader.getInstance()
         val container = loader.getModContainer("mithrilpf").orElseThrow()
+        installedVersion = container.metadata.version.friendlyString
         val game = loader.gameDir.toAbsolutePath().normalize()
         val environment =
             UpdateEnvironment(
@@ -30,6 +37,7 @@ class ModUpdates(private val client: Minecraft) : AutoCloseable {
                     javaClass.getResourceAsStream("/assets/mithrilpf/build.properties"),
                     container.metadata.version.friendlyString,
                 ),
+                firstRun = firstRun,
             )
         service =
             UpdateService(environment, { work -> client.execute(work) }, UpdateHttp()::get) { update
@@ -66,12 +74,29 @@ class ModUpdates(private val client: Minecraft) : AutoCloseable {
 
     fun checkNow() = service.checkNow()
 
+    fun install() = service.install()
+
+    fun installWithDependencies() = service.installWithDependencies()
+
+    fun cancel() = service.cancel()
+
+    fun skip() = service.skip()
+
+    /** "Remind me later": no prompt for this version until the next launch. */
+    fun remindLater() = prompts.remindLater(status.version)
+
     fun tick() {
-        if (status.state == "ready" && status.version != notifiedVersion && client.player != null) {
-            notifiedVersion = status.version
-            client.player?.sendSystemMessage(
-                Component.translatable("update.mithrilpf.notice", status.version)
-            )
+        val title = client.screen as? TitleScreen
+        when (prompts.next(status, title != null, client.player != null)) {
+            UpdatePrompts.Show.OPT_IN ->
+                title?.let { client.setScreen(UpdateOptInScreen(it, this)) }
+            UpdatePrompts.Show.PROMPT ->
+                title?.let { client.setScreen(UpdatePromptScreen(it, this)) }
+            UpdatePrompts.Show.NOTICE ->
+                client.player?.sendSystemMessage(
+                    Component.translatable("update.mithrilpf.available_notice", status.version)
+                )
+            UpdatePrompts.Show.NONE -> Unit
         }
     }
 

@@ -134,8 +134,31 @@ publishing code from main, so merge workflow changes before enabling uploads.
 
 ## Automatic updates
 
-Open `/mpf → Settings`. Auto-update defaults on; **Include pre-releases** defaults
-off. Only JARs built by this repository's tagged **Release** workflow can self-update.
+MithrilPF never installs an update without asking. On launch it only checks GitHub;
+when a newer compatible release is found, a prompt over the title screen shows its
+version and notes with **Install on exit**, **Remind me later**, **Skip this version**,
+**View on GitHub** and **View on Modrinth**. Nothing is downloaded until **Install on
+exit**; the update then downloads, is verified and installs when Minecraft quits.
+**Cancel install** withdraws approval. Remind me later asks again next launch; a skipped
+version is not offered again, but newer versions are, and `/mpf → Settings → Review update` can still install it. A release found while you are in a world is
+announced in chat instead, and the prompt waits for the title screen.
+
+If a release needs a mod that is not installed at all (for example Hypixel Mod API),
+the prompt offers it from Modrinth with **Install all**; nothing is downloaded until
+you choose that. Each signed release lists its dependencies' Modrinth projects in
+`assets/mithrilpf/dependencies.json`, so only those projects are used. Only Modrinth
+releases (not betas) for this Minecraft version and Fabric are offered. The file must
+come from `cdn.modrinth.com`, match Modrinth's SHA-512, carry the expected mod ID and a
+version meeting the requirement, and have its own requirements met. All approved
+dependencies are verified before any is added to `mods/`; they are added right away as
+new files (loaded next launch) and existing files are never replaced. Installed but
+outdated dependencies, Minecraft, Fabric Loader and Java are only named in the prompt.
+
+New installs (no `config/mithrilpf/` yet) are asked once whether to check on launch;
+nothing is checked until they choose. Existing installs keep checking but always
+ask before installing. **Check for updates on launch** and **Include pre-releases**
+(off by default) are in `/mpf → Settings`. Only JARs built by this
+repository's tagged **Release** workflow can self-update.
 Local builds and PR artifacts are marked local: they never check, download or install
 updates, even if a newer remote version exists. This protects local commits/dirty
 changes without relying on developers to bump the version. Missing/mismatched build
@@ -145,10 +168,11 @@ Each official-build launch checks GitHub; Check now retries at most once per min
 Checks/downloads run on a background worker. No GitHub login or Minecraft token
 is sent. With pre-releases off, only the latest published stable release is
 considered. With it on, the newest 50 published releases are searched by semantic
-version (up to five newer candidates inspected). Drafts, equal/older versions,
+version and the newest is offered. Drafts, equal/older versions,
 missing checksums/signatures and incompatible Minecraft/dependency requirements are rejected.
 Turning either toggle off cancels an in-progress/staged update as appropriate;
-it never downgrades an already-installed beta.
+it never downgrades an already-installed beta. Release notes shown in the prompt are
+display text only; installation is authorized solely by the signed metadata.
 
 Downloads are restricted to this repository's HTTPS GitHub release URLs and
 GitHub's release-asset host, with redirect, size and time limits. The API's SHA-256
@@ -157,7 +181,9 @@ an Ed25519 signature using the public key pinned in the installed mod. The JAR
 must then match that authenticated digest. Missing/invalid signatures never fall
 back to checksum-only installation. See [release signing](RELEASING.md#release-signatures)
 for key custody, bootstrap limitations and manual verification.
-The updater never updates Minecraft, Fabric, Kotlin or any other mod.
+The updater never updates Minecraft, Fabric Loader, Java or an installed mod; it only
+adds missing dependencies you approve, from Modrinth's public API (`api.modrinth.com`,
+version lists only) and CDN (`cdn.modrinth.com`), without any login or token.
 
 A ready update is installed only after quitting Minecraft, by a tiny JDK-only
 helper extracted from the running mod. It uses the same Java installation, waits
@@ -174,7 +200,7 @@ Settings are in `config/mithrilpf/updates.json`; malformed/newer schemas are
 not overwritten and disable installation. Staging and helper logs are confined to
 `config/mithrilpf/updates/job-*`. Crashes may leave unused staging folders; they
 are not automatically installed on the next launch. Backups are retained until
-you remove them. To roll back with Minecraft closed, disable auto-update in
+you remove them. To roll back with Minecraft closed, disable update checks in
 updates.json, copy a backup over the installed MithrilPF JAR and relaunch.
 The first updater-enabled build must be installed manually; older releases cannot
 gain this feature without an update.

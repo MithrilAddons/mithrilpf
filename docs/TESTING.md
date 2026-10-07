@@ -60,9 +60,15 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
   close Minecraft and confirm the activity disappears. Test Windows and Unix IPC
   separately; synthetic stream tests do not verify Discord's actual rendering.
 
-- Updates: test with disposable instances first. Check stable-only and pre-release
-  selection, turn updates off during/after download, quit normally and verify the
-  new internal version plus backup. Test locked/read-only targets and an interrupted
+- Updates: test with disposable instances first. Check the first-run question on a
+  new instance and that an existing instance is not asked. Verify the title-screen
+  prompt (notes, scrolling, narrow windows), that nothing downloads before Install on
+  exit, Remind me later, Skip this version, Review update, Cancel install, both web
+  buttons, the in-world chat notice and a release needing a missing mod: Install all
+  must add it to `mods/` only after approval, and an outdated or already-present file
+  must not be replaced. Check
+  stable-only and pre-release selection, turn updates off during/after download, quit
+  normally and verify the new internal version plus backup. Test locked/read-only targets and an interrupted
   quit. The helper must not replace a changed installed/staged file or run downloads.
   Automated tests use synthetic releases, temporary directories and harmless Java
   child processes; they do not access GitHub, real credentials or the user's mods.

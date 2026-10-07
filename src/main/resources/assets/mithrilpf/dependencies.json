@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "modrinth": {
+    "fabric-api": { "project": "P7dR8mSH", "name": "Fabric API" },
+    "fabric-language-kotlin": { "project": "Ha28R6CL", "name": "Fabric Language Kotlin" },
+    "hypixel-mod-api": { "project": "1A2mKfBx", "name": "Hypixel Mod API" }
+  }
+}

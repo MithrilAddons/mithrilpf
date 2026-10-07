@@ -343,7 +343,7 @@ class PartyFinderScreen(
             { updates.status.settings.enabled },
             { updates.status.loaded },
         ) {
-            updates.configure(updates.status.settings.copy(enabled = it))
+            updates.configure(updates.status.settings.copy(enabled = it, asked = true))
         }
         toggle(
             right,
@@ -353,12 +353,13 @@ class PartyFinderScreen(
             { updates.status.settings.prereleases },
             { updates.status.loaded },
         ) {
-            updates.configure(updates.status.settings.copy(prereleases = it))
+            updates.configure(updates.status.settings.copy(prereleases = it, asked = true))
         }
         dynamic(right, w) {
             Component.translatable(
                 "update.mithrilpf.${updates.status.state}",
                 updates.status.version,
+                updates.status.unmet.joinToString(", "),
             )
         }
         val check =
@@ -377,6 +378,9 @@ class PartyFinderScreen(
             ) {
                 updates.checkNow()
             }
+        action(right, "update.mithrilpf.review", w, enabled = { updates.status.release != null }) {
+            minecraft.setScreen(UpdatePromptScreen(this, updates))
+        }
         bindings += {
             check.message =
                 if (

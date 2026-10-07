@@ -157,6 +157,8 @@ class UpdateTest {
                 UpdateCatalog.API + "/latest",
                 "${UpdateCatalog.REPO}/releases/download/v1.0.0/mithrilpf-1.0.0.jar",
                 "https://release-assets.githubusercontent.com/a?signature=x",
+                "https://api.modrinth.com/v2/project/1A2mKfBx/version?loaders=x",
+                "https://cdn.modrinth.com/data/1A2mKfBx/versions/abc/mod.jar",
             )) assertTrue(UpdateHttp.allowed(URI(url)))
         for (url in
             listOf(
@@ -167,6 +169,11 @@ class UpdateTest {
                 "https://127.0.0.1/a",
                 "https://api.github.com/user",
                 "https://release-assets.githubusercontent.com:8443/a",
+                "https://api.modrinth.com/v2/user",
+                "https://api.modrinth.com/v2/project/1A2mKfBx/version/../../user",
+                "https://cdn.modrinth.com/other/file.jar",
+                "https://cdn.modrinth.com/data/../other/file.jar",
+                "http://cdn.modrinth.com/data/1A2mKfBx/mod.jar",
             )) assertFalse(UpdateHttp.allowed(URI(url)))
     }
 
@@ -213,7 +220,17 @@ class UpdateTest {
             store.save(UpdateSettings(false, true))
             assertEquals(UpdateSettings(false, true), store.load())
             assertTrue(Files.readString(file).contains("keep"))
-            for (bad in listOf("{", """{"version":2}""", """{"version":1,"enabled":"yes"}""")) {
+            store.save(UpdateSettings(true, true, skipped = "0.3.0-rc.1", asked = false))
+            assertEquals(UpdateSettings(true, true, "0.3.0-rc.1", false), store.load())
+            store.save(UpdateSettings(true, true))
+            assertFalse(Files.readString(file).contains("skipped"))
+            for (bad in
+                listOf(
+                    "{",
+                    """{"version":2}""",
+                    """{"version":1,"enabled":"yes"}""",
+                    """{"version":1,"skipped":"latest"}""",
+                )) {
                 Files.writeString(file, bad)
                 assertFails { store.save(UpdateSettings()) }
                 assertEquals(bad, Files.readString(file))
@@ -256,18 +273,26 @@ class UpdateTest {
                     "fabric-api" to "1.0.0",
                 )
             write()
-            assertTrue(UpdateArtifact.compatible(jar, artifact(), mods))
-            assertFalse(UpdateArtifact.compatible(jar, artifact(), mods - "fabric-api"))
-            assertFalse(UpdateArtifact.compatible(jar, artifact(), mods + ("java" to "21")))
+            fun unmet(installed: Map<String, String>) =
+                UpdateArtifact.unmet(jar, artifact(), installed).map { it.toString() }
+            assertEquals(emptyList(), unmet(mods))
+            assertEquals(
+                listOf("fabric-api >=1.0.0"),
+                unmet(mods - "fabric-api"),
+            )
+            assertEquals(
+                listOf("java >=25"),
+                unmet(mods + ("java" to "21")),
+            )
             val original = artifact()
             Files.write(jar, byteArrayOf(1))
-            assertFails { UpdateArtifact.compatible(jar, original, mods) }
+            assertFails { UpdateArtifact.unmet(jar, original, mods) }
             write(mc = "27.0")
-            assertFalse(UpdateArtifact.compatible(jar, artifact(), mods))
+            assertEquals(listOf("minecraft 27.0"), unmet(mods))
             write(id = "other")
-            assertFails { UpdateArtifact.compatible(jar, artifact(), mods) }
+            assertFails { UpdateArtifact.unmet(jar, artifact(), mods) }
             write(breaks = ""","breaks":{"fabric-api":"*"}""")
-            assertFalse(UpdateArtifact.compatible(jar, artifact(), mods))
+            assertEquals(listOf("no fabric-api"), unmet(mods))
         } finally {
             dir.toFile().deleteRecursively()
         }

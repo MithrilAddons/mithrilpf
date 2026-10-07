@@ -14,6 +14,7 @@ import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.FinderNavigation
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
+import java.nio.file.Files
 import java.util.UUID
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
@@ -25,6 +26,7 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
+import net.fabricmc.loader.api.FabricLoader
 import net.hypixel.modapi.HypixelModAPI
 import net.hypixel.modapi.packet.impl.clientbound.ClientboundPartyInfoPacket
 import net.minecraft.client.KeyMapping
@@ -92,6 +94,8 @@ object MithrilPF : ClientModInitializer {
     }
 
     override fun onInitializeClient() {
+        // Before any component can create it: no MithrilPF config means a new install.
+        val firstRun = !Files.exists(FabricLoader.getInstance().configDir.resolve("mithrilpf"))
         val client = Minecraft.getInstance()
         browserLink = BrowserLink(client)
         nativeAccount = NativeAccount(client)
@@ -99,7 +103,7 @@ object MithrilPF : ClientModInitializer {
         recordSync = RecordSync(client)
         parties = PartyClient(client)
         discord = DiscordPresence()
-        updates = ModUpdates(client)
+        updates = ModUpdates(client, firstRun)
         registerPartyEvents(client)
         DungeonTimers.register()
         dev.mithril.mithrilpf.ui.FinderHud.register()

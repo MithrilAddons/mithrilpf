@@ -14,6 +14,9 @@ class FlatButton(
     private val primary: Boolean = false,
     action: () -> Unit,
 ) : Button(x, y, width, 20, label, { action() }, DEFAULT_NARRATION) {
+    /** Destructive actions (such as skipping an update) use danger-coloured text. */
+    var danger = false
+
     override fun extractContents(
         g: GuiGraphicsExtractor,
         mouseX: Int,
@@ -32,7 +35,7 @@ class FlatButton(
             text,
             x + (width - font.width(text)) / 2,
             y + (height - 9) / 2,
-            colors.text,
+            if (danger && active && !primary) Palette.DANGER else colors.text,
             false,
         )
     }

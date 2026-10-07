@@ -11,7 +11,8 @@ import java.util.concurrent.Flow
 import java.util.concurrent.TimeUnit
 
 /**
- * Public GitHub endpoints only. No Minecraft credentials, automatic redirects or unbounded reads.
+ * This repository's public GitHub releases and Modrinth's public version API/CDN only. No Minecraft
+ * credentials, automatic redirects or unbounded reads.
  */
 class UpdateHttp {
     fun get(uri: URI, limit: Int): ByteArray {
@@ -33,8 +34,11 @@ class UpdateHttp {
                                 .header("User-Agent", "MithrilPF-Updater")
                                 .header(
                                     "Accept",
-                                    if (url.host == "api.github.com") "application/vnd.github+json"
-                                    else "application/octet-stream",
+                                    when (url.host) {
+                                        "api.github.com" -> "application/vnd.github+json"
+                                        "api.modrinth.com" -> "application/json"
+                                        else -> "application/octet-stream"
+                                    },
                                 )
                                 .GET()
                                 .build()
@@ -52,7 +56,7 @@ class UpdateHttp {
                         if (response.statusCode() == 404 && uri.path.endsWith("/latest"))
                             return "[]".toByteArray()
                         require(response.statusCode() in setOf(301, 302, 303, 307, 308)) {
-                            "GitHub HTTP ${response.statusCode()}"
+                            "Update HTTP ${response.statusCode()}"
                         }
                         url = url.resolve(response.headers().firstValue("Location").orElseThrow())
                     }
@@ -76,6 +80,9 @@ class UpdateHttp {
                     "github.com" ->
                         uri.path.startsWith("/MithrilAddons/mithrilpf/releases/download/")
                     "release-assets.githubusercontent.com" -> true
+                    "api.modrinth.com" ->
+                        uri.path.matches(Regex("/v2/project/[A-Za-z0-9]{8}/version"))
+                    "cdn.modrinth.com" -> uri.path.startsWith("/data/") && ".." !in uri.path
                     else -> false
                 }
     }
