@@ -61,6 +61,7 @@ internal constructor(
     private var loadingBoard = false
     private var catalogRequested = false
     private var nextPoll = 0L
+    private var nextCatalog = 0L
 
     var catalog: Catalog? = null
         private set
@@ -93,11 +94,12 @@ internal constructor(
         if (identity != host.uuid || credential != host.token) reset()
         val token = credential ?: return
         if (!visible) return
-        if (!catalogRequested) loadCatalog(token)
-        val day = today
         val now = host.now()
+        if (!catalogRequested && now >= nextCatalog) loadCatalog(token)
+        val day = today
+        // Failed loads wait before retrying, so an outage never turns into a request per tick.
         when {
-            day == null -> if (!loadingToday) loadToday(token)
+            day == null -> if (!loadingToday && now >= nextPoll) loadToday(token)
             day.state == RoundState.PREPARING ->
                 if (!loadingToday && now >= nextPoll) loadToday(token)
             now >= day.resetsAt && !newDay -> {
@@ -191,7 +193,12 @@ internal constructor(
 
     private fun loadCatalog(token: String) {
         catalogRequested = true
-        submit(onFailure = { catalogRequested = false }) {
+        submit(
+            onFailure = {
+                catalogRequested = false
+                nextCatalog = host.now() + RETRY
+            }
+        ) {
             val cached = store.load()
             val version = cached?.version?.let { URLEncoder.encode(it, Charsets.UTF_8) }
             val path = "games/curator/catalog" + (version?.let { "?version=$it" } ?: "")
@@ -242,6 +249,7 @@ internal constructor(
         newDay = false
         error = null
         nextPoll = 0
+        nextCatalog = 0
         revision++
     }
 

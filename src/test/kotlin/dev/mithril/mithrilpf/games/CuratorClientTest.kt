@@ -98,6 +98,26 @@ class CuratorClientTest {
     }
 
     @Test
+    fun `failed loads wait before retrying`() {
+        val host = Host()
+        val server = Server()
+        server.responses["games/curator/catalog"] = { throw ServiceFailure(503) }
+        server.responses["games/curator/today"] = { throw ServiceFailure(503) }
+        val games = client(host, server)
+        games.tick(visible = true)
+        host.apply(2)
+        assertEquals("unavailable", games.error)
+        repeat(3) { games.tick(visible = true) }
+        assertTrue(host.callbacks.isEmpty())
+        assertEquals(2, server.calls.size)
+        host.clock += CuratorClient.RETRY
+        games.tick(visible = true)
+        host.apply(2)
+        assertEquals(4, server.calls.size)
+        games.close()
+    }
+
+    @Test
     fun `nothing loads while hidden or signed out`() {
         val host = Host()
         val server = Server()

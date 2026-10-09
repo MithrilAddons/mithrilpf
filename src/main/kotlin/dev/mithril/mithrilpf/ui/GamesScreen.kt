@@ -48,6 +48,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     private var copiedUntil = 0L
     private var notice: String? = null
     private var drawn: Pair<String, ItemStack>? = null
+    private var boardRequested = false
 
     override fun init() {
         layout = GamesLayout.fit(width, height)
@@ -78,7 +79,11 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             return
         }
         if (view == View.LEADERBOARD) {
-            if (games.board == null) games.loadBoard()
+            // Once per opening or switch; a failed load waits for the next one.
+            if (games.board == null && !boardRequested) {
+                boardRequested = true
+                games.loadBoard()
+            }
             return
         }
         val day = games.today ?: return
@@ -132,6 +137,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     private fun switch(next: View) {
         view = next
         scroll = 0
+        boardRequested = false
         rebuildWidgets()
     }
 
@@ -312,17 +318,12 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             status(g, text("next_in", countdown(day)), Palette.MUTED)
             return null
         }
-        g.text(
-            font,
-            text("number", day.number ?: 0),
-            layout.pageX,
-            layout.top + 6,
-            Palette.TEXT,
-            false,
-        )
+        val number = text("number", day.number ?: 0)
+        g.text(font, number, layout.pageX, layout.top + 6, Palette.TEXT, false)
         val count =
             text(if (layout.wide) "guesses" else "guesses.short", day.guesses.size, day.limit)
-        g.text(font, count, layout.pageX + 66, layout.top + 6, Palette.MUTED, false)
+        val countX = layout.pageX + font.width(number) + 8
+        g.text(font, count, countX, layout.top + 6, Palette.MUTED, false)
         headers(g)
         val tooltip = rows(g, day, mouseX, mouseY) ?: headerTooltip(mouseX, mouseY)
         when {
