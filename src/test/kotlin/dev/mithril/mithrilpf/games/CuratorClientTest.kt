@@ -204,20 +204,52 @@ class CuratorClientTest {
     }
 
     @Test
-    fun `the leaderboard loads once until a guess changes it`() {
+    fun `an open leaderboard picks up other players' results`() {
         val host = Host()
         val server = Server()
         val games = ready(host, server)
+        fun loads() = server.calls.count { it.first == "games/curator/leaderboard" }
         server.responses["games/curator/leaderboard"] = { contract("leaderboard") }
-        games.loadBoard()
-        games.loadBoard()
+        games.tick(visible = true)
+        assertEquals(0, loads())
+        games.boardOpen = true
+        games.tick(visible = true)
+        games.tick(visible = true)
         host.apply()
         assertEquals("2027-01", games.board!!.season)
-        assertEquals(1, server.calls.count { it.first == "games/curator/leaderboard" })
+        assertEquals(1, loads())
+        // Someone else finishing changes the standings; an open view notices within a minute.
+        host.clock += CuratorClient.BOARD_REFRESH - 1
+        games.tick(visible = true)
+        assertTrue(host.callbacks.isEmpty())
+        host.clock += 1
+        games.tick(visible = true)
+        host.apply()
+        assertEquals(2, loads())
+        // Reopening the screen, or the player's own guess, fetches it straight away.
+        games.refreshBoard()
+        games.tick(visible = true)
+        host.apply()
+        assertEquals(3, loads())
+        server.responses["games/curator/guess"] = { contract("solved") }
+        games.guess(CatalogItem("SYNTHESIZER_V3", "Synthesizer v3"))
+        host.apply()
+        games.tick(visible = true)
+        host.apply()
+        assertEquals(4, loads())
+        assertNotNull(games.board)
         server.responses["games/curator/leaderboard"] = { throw ServiceFailure(503) }
-        games.loadBoard()
+        games.refreshBoard()
+        games.tick(visible = true)
         host.apply()
         assertEquals("unavailable", games.error)
+        assertNotNull(games.board)
+        games.tick(visible = true)
+        assertEquals(5, loads())
+        games.boardOpen = false
+        host.clock += CuratorClient.BOARD_REFRESH
+        games.tick(visible = true)
+        assertEquals(5, loads())
         games.close()
     }
 

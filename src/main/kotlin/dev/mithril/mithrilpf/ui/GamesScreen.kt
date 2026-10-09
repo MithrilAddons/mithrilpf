@@ -48,7 +48,11 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     private var copiedUntil = 0L
     private var notice: String? = null
     private var drawn: Pair<String, ItemStack>? = null
-    private var boardRequested = false
+
+    init {
+        // Each opening shows current standings, not the ones from earlier in the session.
+        games.refreshBoard()
+    }
 
     override fun init() {
         layout = GamesLayout.fit(width, height)
@@ -78,14 +82,8 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             )
             return
         }
-        if (view == View.LEADERBOARD) {
-            // Once per opening or switch; a failed load waits for the next one.
-            if (games.board == null && !boardRequested) {
-                boardRequested = true
-                games.loadBoard()
-            }
-            return
-        }
+        games.boardOpen = view == View.LEADERBOARD
+        if (view == View.LEADERBOARD) return
         val day = games.today ?: return
         when {
             games.newDay ->
@@ -137,7 +135,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     private fun switch(next: View) {
         view = next
         scroll = 0
-        boardRequested = false
+        if (next == View.LEADERBOARD) games.refreshBoard()
         rebuildWidgets()
     }
 
@@ -742,6 +740,10 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
 
     override fun onClose() {
         minecraft.setScreen(parent)
+    }
+
+    override fun removed() {
+        games.boardOpen = false
     }
 
     override fun isPauseScreen() = false
