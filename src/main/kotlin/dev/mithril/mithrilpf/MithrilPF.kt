@@ -97,41 +97,8 @@ object MithrilPF : ClientModInitializer {
         }
     }
 
-    override fun onInitializeClient() {
-        // Before any component can create it: no MithrilPF config means a new install.
-        val firstRun = !Files.exists(FabricLoader.getInstance().configDir.resolve("mithrilpf"))
-        val client = Minecraft.getInstance()
-        browserLink = BrowserLink(client)
-        nativeAccount = NativeAccount(client)
-        finder = FinderClient(client, nativeAccount)
-        recordSync = RecordSync(client)
-        parties = PartyClient(client)
-        discord = DiscordPresence()
-        games = CuratorClient(client, nativeAccount)
-        updates = ModUpdates(client, firstRun)
-        registerPartyEvents(client)
-        DungeonTimers.register()
-        dev.mithril.mithrilpf.ui.FinderHud.register()
-        val category =
-            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("mithrilpf", "main"))
-        val key =
-            KeyMappingHelper.registerKeyMapping(
-                KeyMapping(
-                    "key.mithrilpf.open",
-                    InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_UNKNOWN,
-                    category,
-                )
-            )
-        val gamesKey =
-            KeyMappingHelper.registerKeyMapping(
-                KeyMapping(
-                    "key.mithrilpf.games",
-                    InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_UNKNOWN,
-                    category,
-                )
-            )
+    /** Chat, invite, finder and games commands. */
+    private fun registerCommands(client: Minecraft) {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             for (name in listOf("mpc", "mithrilpfchat")) dispatcher.register(
                 literal(name)
@@ -175,6 +142,44 @@ object MithrilPF : ClientModInitializer {
                 }
             )
         }
+    }
+
+    override fun onInitializeClient() {
+        // Before any component can create it: no MithrilPF config means a new install.
+        val firstRun = !Files.exists(FabricLoader.getInstance().configDir.resolve("mithrilpf"))
+        val client = Minecraft.getInstance()
+        browserLink = BrowserLink(client)
+        nativeAccount = NativeAccount(client)
+        finder = FinderClient(client, nativeAccount)
+        recordSync = RecordSync(client)
+        parties = PartyClient(client)
+        discord = DiscordPresence()
+        games = CuratorClient(client, nativeAccount)
+        updates = ModUpdates(client, firstRun)
+        registerPartyEvents(client)
+        DungeonTimers.register()
+        dev.mithril.mithrilpf.ui.FinderHud.register()
+        val category =
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("mithrilpf", "main"))
+        val key =
+            KeyMappingHelper.registerKeyMapping(
+                KeyMapping(
+                    "key.mithrilpf.open",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_UNKNOWN,
+                    category,
+                )
+            )
+        val gamesKey =
+            KeyMappingHelper.registerKeyMapping(
+                KeyMapping(
+                    "key.mithrilpf.games",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_UNKNOWN,
+                    category,
+                )
+            )
+        registerCommands(client)
         ClientTickEvents.END_CLIENT_TICK.register {
             nativeAccount.tick()
             finder.tick(client.screen is PartyFinderScreen)

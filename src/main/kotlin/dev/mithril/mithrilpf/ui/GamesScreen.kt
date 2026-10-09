@@ -194,38 +194,24 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     }
 
     override fun keyPressed(event: KeyEvent): Boolean {
-        val box = input
-        if (box != null && box.isFocused) {
-            val open = suggestions.isNotEmpty()
-            when (event.key()) {
-                GLFW.GLFW_KEY_DOWN ->
-                    if (open) {
-                        highlighted = (highlighted + 1) % suggestions.size
-                        return true
-                    }
-                GLFW.GLFW_KEY_UP ->
-                    if (open) {
-                        highlighted = (highlighted - 1 + suggestions.size) % suggestions.size
-                        return true
-                    }
-                GLFW.GLFW_KEY_TAB ->
-                    if (open) {
-                        submit(pickOnly = true)
-                        return true
-                    }
-                GLFW.GLFW_KEY_ENTER,
-                GLFW.GLFW_KEY_KP_ENTER -> {
-                    submit(pickOnly = open)
-                    return true
-                }
-                GLFW.GLFW_KEY_ESCAPE ->
-                    if (open) {
-                        suggestions = emptyList()
-                        return true
-                    }
-            }
-        }
+        if (input?.isFocused == true && guessBoxKey(event.key())) return true
         return super.keyPressed(event)
+    }
+
+    /** Keys the guess box handles itself; false lets the screen handle the key. */
+    private fun guessBoxKey(key: Int): Boolean {
+        val open = suggestions.isNotEmpty()
+        when (key) {
+            GLFW.GLFW_KEY_ENTER,
+            GLFW.GLFW_KEY_KP_ENTER -> submit(pickOnly = open)
+            GLFW.GLFW_KEY_DOWN -> if (open) highlighted = (highlighted + 1) % suggestions.size
+            GLFW.GLFW_KEY_UP ->
+                if (open) highlighted = (highlighted - 1 + suggestions.size) % suggestions.size
+            GLFW.GLFW_KEY_TAB -> if (open) submit(pickOnly = true)
+            GLFW.GLFW_KEY_ESCAPE -> if (open) suggestions = emptyList()
+            else -> return false
+        }
+        return open || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER
     }
 
     override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
