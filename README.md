@@ -5,7 +5,7 @@
 ![PF Icon](https://github.com/MithrilAddons/mithrilpf/blob/main/src/main/resources/assets/mithrilpf/icon.png?raw=true)
 
 ![GitHub License](https://img.shields.io/github/license/MithrilAddons/mithrilpf?style=for-the-badge)
-[![Discord](https://img.shields.io/discord/1553531327662526464?style=for-the-badge)](https://discord.gg/t3PjnPWXKS)
+[![Discord](https://img.shields.io/discord/1553531327662526464?style=for-the-badge)](https://discord.gg/7uRvj6yc4J)
 [![Version](https://img.shields.io/github/v/release/MithrilAddons/mithrilpf?include_prereleases&style=for-the-badge)](https://github.com/MithrilAddons/mithrilpf/releases)
 ![GitHub Downloads](https://img.shields.io/github/downloads/MithrilAddons/mithrilpf/total?style=for-the-badge&color=blue)
 
@@ -34,11 +34,11 @@ Requires **Minecraft 26.1.2**, **Fabric Loader**, **Fabric API**, **Fabric Langu
 
 ## Community and Support
 
-- **Bug reports:** Open an [issue](https://github.com/MithrilAddons/mithrilpf/issues) on GitHub or post in `#bug-reports` on [Discord](https://discord.gg/t3PjnPWXKS).
-- **Feature suggestions:** Use the `#suggestions` channel on [Discord](https://discord.gg/t3PjnPWXKS).
-- **General support:** Open a support ticket on [Discord](https://discord.gg/t3PjnPWXKS).
+- **Bug reports:** Open an [issue](https://github.com/MithrilAddons/mithrilpf/issues) on GitHub or post in `#bug-reports` on [Discord](https://discord.gg/7uRvj6yc4J).
+- **Feature suggestions:** Use the `#suggestions` channel on [Discord](https://discord.gg/7uRvj6yc4J).
+- **General support:** Open a support ticket on [Discord](https://discord.gg/7uRvj6yc4J).
 
-You're also welcome to join the [Discord](https://discord.gg/t3PjnPWXKS) to chat with the community and receive updates about the mod!
+You're also welcome to join the [Discord](https://discord.gg/7uRvj6yc4J) to chat with the community and receive updates about the mod!
 
 ## Contributing
 
