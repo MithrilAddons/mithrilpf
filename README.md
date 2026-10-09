@@ -22,6 +22,7 @@ MithrilPF is a Fabric mod for Hypixel SkyBlock that makes finding dungeon partie
 - **In-game party system:** Look for teammates without having to sit in the Dungeon Hub.
 - **Website integration:** Continue your search while offline through the [website](https://mithril.foo/party-finder).
 - **PB tracking:** Tracks solo-clear times and terminal-phase PBs for more detailed party requirements.
+- **Games:** `/games` opens Curator, a daily SkyBlock item guessing game with a monthly leaderboard.
 
 ## Installation
 

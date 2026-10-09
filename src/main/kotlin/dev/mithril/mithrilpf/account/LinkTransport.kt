@@ -69,6 +69,24 @@ object LinkTransport {
         return request(path, body, token, 1048576, if (path == "party/client/state") 35 else 12)
     }
 
+    /** Curator's item list is the largest response the mod reads, about 200 KiB. */
+    fun gameRequest(path: String, body: JsonObject?, token: String): String {
+        validateGamePath(path, body)
+        require(token.matches(Regex("[A-Za-z0-9_-]{43}")))
+        return request(path, body, token, 1048576)
+    }
+
+    internal fun validateGamePath(path: String, body: JsonObject?) {
+        val reads =
+            setOf("games/curator/today", "games/curator/leaderboard", "games/curator/catalog")
+        require(
+            if (body == null)
+                path in reads ||
+                    path.matches(Regex("games/curator/catalog\\?version=[A-Za-z0-9:._%-]{1,64}"))
+            else path == "games/curator/guess"
+        )
+    }
+
     internal fun validateFinderPath(path: String, token: String?) {
         val proof = path in setOf("auth/device-challenge", "auth/device-verify")
         val allowed =
@@ -138,7 +156,11 @@ object LinkTransport {
                         client.shutdownNow()
                     }
                 if (response.statusCode() != 200)
-                    throw ServiceFailure(response.statusCode(), failureReason(response.body()))
+                    throw ServiceFailure(
+                        response.statusCode(),
+                        failureReason(response.body()),
+                        detail(response.body()),
+                    )
                 return response.body()
             }
     }
@@ -167,6 +189,12 @@ object LinkTransport {
             "unknown_names" -> "unknown_names"
             else -> null
         }
+    }
+        .getOrNull()
+
+    /** The server's own explanation, when it sent one as plain text. */
+    internal fun detail(body: String): String? = runCatching {
+        JsonParser.parseString(body).asJsonObject.get("detail").asString.take(200)
     }
         .getOrNull()
 
@@ -201,5 +229,8 @@ object LinkTransport {
     }
 }
 
-class ServiceFailure(val statusCode: Int, val reason: String? = null) :
-    Exception("Mithril service unavailable")
+class ServiceFailure(
+    val statusCode: Int,
+    val reason: String? = null,
+    val detail: String? = null,
+) : Exception("Mithril service unavailable")

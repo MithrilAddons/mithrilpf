@@ -317,3 +317,17 @@ reuse an ID for just under ten minutes. Accounts/parties are isolated, stale rep
 are discarded, and network work runs on bounded background workers. No chat text
 or credentials are saved to mod files or explicitly logged by the mod (Minecraft
 may include displayed chat in its own normal client log).
+
+`/games` (also `/mpfgames`, or an unbound Controls keybind) opens the Games screen, a
+separate screen from the finder. Its first game is Curator: one SkyBlock item per UTC
+day, guessed in up to ten tries from ten clue columns (rarity, type, museum, stage,
+requirements, soulbound, origin, market value, NPC price and name length). The backend
+picks and judges everything; the mod only sends the chosen item ID with the linked
+device session and never posts to Hypixel chat. Hovering a cell explains its clue;
+Copy result puts a Wordle-style square grid on the clipboard. The Leaderboard view shows
+the monthly season. The guessable item list is cached in `config/mithrilpf/curator.json`
+and refreshed only when the backend reports a new version; a file this version can't
+read is left untouched. Windows narrower than 640 GUI units show guess numbers instead
+of item names. The protocol lives in the web repository's
+[API guide](https://github.com/MithrilAddons/web/blob/main/docs/API.md); the shared
+synthetic responses are in `src/test/resources/contracts/curator-v1.json`.

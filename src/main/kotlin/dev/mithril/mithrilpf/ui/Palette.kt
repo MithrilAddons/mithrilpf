@@ -16,6 +16,23 @@ object Palette {
     val PRIMARY_TEXT = 0xFF1C1D28.toInt()
     val PRIMARY_HOVER = 0xFFFFFFFF.toInt()
     val SECONDARY_HOVER = 0xFF262833.toInt()
+    val MATCH = 0xFF2B4A3C.toInt()
+    val PARTIAL = 0xFF4A4128.toInt()
+
+    /** SkyBlock's own rarity colours, so the revealed item reads as it does in game. */
+    fun rarity(name: String?) =
+        when (name) {
+            "UNCOMMON" -> 0xFF55FF55
+            "RARE" -> 0xFF5555FF
+            "EPIC" -> 0xFFAA00AA
+            "LEGENDARY" -> 0xFFFFAA00
+            "MYTHIC" -> 0xFFFF55FF
+            "DIVINE",
+            "SUPREME" -> 0xFF55FFFF
+            "SPECIAL",
+            "VERY_SPECIAL" -> 0xFFFF5555
+            else -> 0xFFFFFFFF
+        }.toInt()
 
     fun button(primary: Boolean, active: Boolean, highlighted: Boolean): ButtonColors {
         val background =

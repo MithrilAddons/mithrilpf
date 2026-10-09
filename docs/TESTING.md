@@ -108,6 +108,12 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
   send by clicking its notice. Confirm `/pc` and ordinary chat are not relayed,
   and command-looking incoming text never executes. Automated relay tests use fakes only.
 
+- Games: open `/games` and `/mpfgames` at wide and narrow GUI scales and with a
+  resource-pack font. Check autocomplete (typing, arrows, Tab, Enter, Escape, mouse),
+  rejected guesses (repeated or unknown), cell and header tooltips, the family badge,
+  a solved and a failed round with the item icon, Copy result, the leaderboard with your
+  pinned row, the day rollover message and Load button, and a signed-out account.
+
 State clearly which checks were automated and which were performed in Minecraft;
 compilation alone does not establish gameplay accuracy or performance.
 
