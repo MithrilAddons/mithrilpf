@@ -1,0 +1,36 @@
+name: Update Modrinth Discord link
+
+on:
+  workflow_dispatch:
+    inputs:
+      invite:
+        description: Discord invite to link from Modrinth (https://discord.gg/...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modrinth-publishing
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'MithrilAddons/mithrilpf'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Point Modrinth at the invite
+        env:
+          DISCORD_INVITE: ${{ inputs.invite }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID || 'mithrilpf' }}
+        run: python -m tools.modrinth_discord
