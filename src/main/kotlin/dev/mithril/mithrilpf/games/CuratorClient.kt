@@ -62,6 +62,7 @@ internal constructor(
     private var catalogRequested = false
     private var nextPoll = 0L
     private var nextCatalog = 0L
+    private var nextBoard = 0L
 
     var catalog: Catalog? = null
         private set
@@ -87,6 +88,9 @@ internal constructor(
     var revision = 0
         private set
 
+    /** The Leaderboard view is on screen, so other players' results are fetched as they land. */
+    var boardOpen = false
+
     val signedIn
         get() = host.token != null
 
@@ -107,6 +111,14 @@ internal constructor(
                 revision++
             }
         }
+        if (boardOpen && !loadingBoard && now >= nextBoard) loadBoard(token)
+    }
+
+    /**
+     * Fetch the leaderboard again on the next tick, keeping the current one on screen meanwhile.
+     */
+    fun refreshBoard() {
+        nextBoard = 0
     }
 
     /** Fetch the new day after the reset, from the status line's Load button. */
@@ -148,18 +160,17 @@ internal constructor(
             return@submit {
                 guessing = false
                 today = result
-                board = null
+                nextBoard = 0
             }
         }
     }
 
-    fun loadBoard() {
-        val token = credential ?: return
-        if (loadingBoard) return
+    private fun loadBoard(token: String) {
         loadingBoard = true
         submit(
             onFailure = {
                 loadingBoard = false
+                nextBoard = host.now() + BOARD_REFRESH
                 fail(it)
             }
         ) {
@@ -167,6 +178,7 @@ internal constructor(
                 CuratorProtocol.leaderboard(request("games/curator/leaderboard", null, token))
             return@submit {
                 loadingBoard = false
+                nextBoard = host.now() + BOARD_REFRESH
                 board = result
             }
         }
@@ -250,6 +262,7 @@ internal constructor(
         error = null
         nextPoll = 0
         nextCatalog = 0
+        nextBoard = 0
         revision++
     }
 
@@ -260,6 +273,7 @@ internal constructor(
     internal companion object {
         const val NEW_DAY = "A new item is ready"
         const val RETRY = 15L
+        const val BOARD_REFRESH = 60L
 
         /** Known backend messages; anything else reads as the service being unavailable. */
         private val DETAILS =
