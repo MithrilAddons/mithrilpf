@@ -9,9 +9,11 @@ import dev.mithril.mithrilpf.discord.DiscordPresence
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import dev.mithril.mithrilpf.finder.FinderClient
+import dev.mithril.mithrilpf.games.CuratorClient
 import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.FinderNavigation
+import dev.mithril.mithrilpf.ui.GamesScreen
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
 import java.nio.file.Files
@@ -48,6 +50,7 @@ object MithrilPF : ClientModInitializer {
     private lateinit var recordSync: RecordSync
     private lateinit var parties: PartyClient
     private lateinit var discord: DiscordPresence
+    private lateinit var games: CuratorClient
     private val discordModel = DiscordActivityModel()
     private var nextDiscordUpdate = 0L
     lateinit var updates: ModUpdates
@@ -60,6 +63,7 @@ object MithrilPF : ClientModInitializer {
         get() = if (::recordSync.isInitialized) recordSync.status else "waiting"
 
     private var openRequested = false
+    private var gamesRequested = false
     private val finderNavigation = FinderNavigation()
 
     val partyHandoff
@@ -93,31 +97,8 @@ object MithrilPF : ClientModInitializer {
         }
     }
 
-    override fun onInitializeClient() {
-        // Before any component can create it: no MithrilPF config means a new install.
-        val firstRun = !Files.exists(FabricLoader.getInstance().configDir.resolve("mithrilpf"))
-        val client = Minecraft.getInstance()
-        browserLink = BrowserLink(client)
-        nativeAccount = NativeAccount(client)
-        finder = FinderClient(client, nativeAccount)
-        recordSync = RecordSync(client)
-        parties = PartyClient(client)
-        discord = DiscordPresence()
-        updates = ModUpdates(client, firstRun)
-        registerPartyEvents(client)
-        DungeonTimers.register()
-        dev.mithril.mithrilpf.ui.FinderHud.register()
-        val key =
-            KeyMappingHelper.registerKeyMapping(
-                KeyMapping(
-                    "key.mithrilpf.open",
-                    InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_UNKNOWN,
-                    KeyMapping.Category.register(
-                        Identifier.fromNamespaceAndPath("mithrilpf", "main")
-                    ),
-                )
-            )
+    /** Chat, invite, finder and games commands. */
+    private fun registerCommands(client: Minecraft) {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
             for (name in listOf("mpc", "mithrilpfchat")) dispatcher.register(
                 literal(name)
@@ -153,13 +134,59 @@ object MithrilPF : ClientModInitializer {
                     1
                 }
             )
+            // /mpfgames stays available if another mod or server claims /games.
+            for (name in listOf("games", "mpfgames")) dispatcher.register(
+                literal(name).executes {
+                    gamesRequested = true
+                    1
+                }
+            )
         }
+    }
+
+    override fun onInitializeClient() {
+        // Before any component can create it: no MithrilPF config means a new install.
+        val firstRun = !Files.exists(FabricLoader.getInstance().configDir.resolve("mithrilpf"))
+        val client = Minecraft.getInstance()
+        browserLink = BrowserLink(client)
+        nativeAccount = NativeAccount(client)
+        finder = FinderClient(client, nativeAccount)
+        recordSync = RecordSync(client)
+        parties = PartyClient(client)
+        discord = DiscordPresence()
+        games = CuratorClient(client, nativeAccount)
+        updates = ModUpdates(client, firstRun)
+        registerPartyEvents(client)
+        DungeonTimers.register()
+        dev.mithril.mithrilpf.ui.FinderHud.register()
+        val category =
+            KeyMapping.Category.register(Identifier.fromNamespaceAndPath("mithrilpf", "main"))
+        val key =
+            KeyMappingHelper.registerKeyMapping(
+                KeyMapping(
+                    "key.mithrilpf.open",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_UNKNOWN,
+                    category,
+                )
+            )
+        val gamesKey =
+            KeyMappingHelper.registerKeyMapping(
+                KeyMapping(
+                    "key.mithrilpf.games",
+                    InputConstants.Type.KEYSYM,
+                    GLFW.GLFW_KEY_UNKNOWN,
+                    category,
+                )
+            )
+        registerCommands(client)
         ClientTickEvents.END_CLIENT_TICK.register {
             nativeAccount.tick()
             finder.tick(client.screen is PartyFinderScreen)
             recordSync.tick()
             parties.tick(nativeAccount.session?.token, nativeAccount.status == "signing_out")
             updates.tick()
+            games.tick(client.screen is GamesScreen)
             val now = System.nanoTime()
             if (now >= nextDiscordUpdate) {
                 nextDiscordUpdate = now + 1_000_000_000L
@@ -176,10 +203,15 @@ object MithrilPF : ClientModInitializer {
                 )
             }
             while (key.consumeClick()) openRequested = true
+            while (gamesKey.consumeClick()) gamesRequested = true
             if (openRequested) {
                 openRequested = false
                 // Command chat must finish closing before the new screen opens.
                 client.setScreen(screen(client.screen))
+            }
+            if (gamesRequested) {
+                gamesRequested = false
+                client.setScreen(GamesScreen(client.screen, games))
             }
         }
         ClientLifecycleEvents.CLIENT_STOPPING.register {
@@ -189,6 +221,7 @@ object MithrilPF : ClientModInitializer {
             recordSync.close()
             parties.close()
             updates.close()
+            games.close()
             discord.close()
         }
     }
