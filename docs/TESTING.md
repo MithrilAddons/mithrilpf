@@ -8,8 +8,9 @@ redaction. They never use the production private key or a real mod installation.
 Run `gradlew.bat spotlessApply` (`sh gradlew spotlessApply` on Linux), then
 `python tools/check.py`. The script verifies wrapper integrity, JSON keys,
 branch policy, formatting, JVM tests and packaged-JAR metadata/entrypoints.
-The package guard allows only the DungeonConnectionMixin packet hook. Its class
-and the adapted code's CC0 notice must be present in the JAR. The guard also
+The package guard allows only the DungeonConnectionMixin packet hook and the
+read-only BossHealthOverlayAccessor. Their classes and the adapted code's CC0
+notice must be present in the JAR. The guard also
 checks MIT metadata and that the packaged project license matches LICENSE.
 
 Tests use temporary directories and redirected user directories, never live
