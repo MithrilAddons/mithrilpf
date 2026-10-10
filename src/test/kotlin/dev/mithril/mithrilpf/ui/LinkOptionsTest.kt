@@ -18,6 +18,16 @@ class LinkOptionsTest {
         assertTrue(expanded.showAlternatives)
         assertEquals("ABCD-EFGH", expanded.code)
         assertEquals(simple, LinkOptions.from(false, true, "opened", "ABCD-EFGH"))
+        assertTrue(simple.canExpand)
+    }
+
+    @Test
+    fun `without a pending link the other-device toggle is unavailable`() {
+        for (status in listOf("linked", "failed", "expired")) {
+            val options = LinkOptions.from(true, false, status, null)
+            assertFalse(options.canExpand)
+            assertFalse(options.showAlternatives)
+        }
     }
 
     @Test

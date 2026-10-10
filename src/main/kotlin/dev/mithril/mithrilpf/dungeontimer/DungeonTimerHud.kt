@@ -204,8 +204,14 @@ object DungeonTimerHud {
 
     fun size(kind: Kind, position: HudPosition, preview: Boolean = true): Pair<Int, Int> {
         val (w, h) = dimensions(kind, lines(kind, preview))
-        return (w * position.scale).toInt() to (h * position.scale).toInt()
+        val scale = scale(position, w, h)
+        return (w * scale).toInt() to (h * scale).toInt()
     }
+
+    private fun scale(position: HudPosition, w: Int, h: Int) =
+        Minecraft.getInstance().window.let {
+            fittedScale(position.scale, w, h, it.guiScaledWidth, it.guiScaledHeight)
+        }
 
     fun origin(
         kind: Kind,
@@ -227,7 +233,8 @@ object DungeonTimerHud {
         val font = Minecraft.getInstance().font
         g.pose().pushMatrix()
         g.pose().translate(x.toFloat(), y.toFloat())
-        g.pose().scale(position.scale.toFloat(), position.scale.toFloat())
+        val scale = scale(position, w, h).toFloat()
+        g.pose().scale(scale, scale)
         rows.forEachIndexed { index, row ->
             val top =
                 if (kind == Kind.TABLE) index * (font.lineHeight + 3) + if (row.footer) 4 else 0

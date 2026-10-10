@@ -75,6 +75,8 @@ class LinkScreen(private val parent: Screen, private val link: BrowserLink) :
 
     private fun updateButtons() {
         val state = options()
+        // Other devices need a pending link; without one the toggle does nothing.
+        alternatives.active = state.canExpand
         primary.active =
             state.action != LinkAction.REFRESH || !link.working && link.status != "storage_failed"
         primary.message =

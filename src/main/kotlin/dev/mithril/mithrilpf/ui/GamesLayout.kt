@@ -57,6 +57,45 @@ data class GamesLayout(val panel: PanelLayout, val wide: Boolean) {
     val cardY
         get() = bottom - CARD
 
+    /** Room for heading text left of the Today and Leaderboard buttons. */
+    val headingWidth
+        get() = (pageWidth - 152).coerceAtLeast(0)
+
+    val copyWidth
+        get() = if (wide) 100 else 80
+
+    /** Whether the answer's name and the round's stats fit side by side on the result card. */
+    val cardSplit
+        get() = wide || pageWidth - 34 - 110 - 12 - copyWidth - 18 >= 120
+
+    val cardNameWidth
+        get() = if (wide) 160 else 110
+
+    /** Where the stats start on the result card, from its left edge. */
+    val cardTextX
+        get() = if (cardSplit) 34 + cardNameWidth + 12 else 34
+
+    /** Width for the stats, up to the copy button. */
+    val cardTextWidth
+        get() = (pageWidth - cardTextX - copyWidth - 18).coerceAtLeast(0)
+
+    /** Leaderboard rows that fit between the column headings and the status line. */
+    val boardRows
+        get() = ((bottom - 14 - rowsY) / ROW).coerceAtLeast(1)
+
+    /**
+     * How the leaderboard fills its rows: as many of the [top] rows as fit, then, when your own row
+     * is listed separately ([you]), a gap marker and your row, which always show.
+     */
+    fun board(top: Int, you: Boolean): BoardRows {
+        if (!you) return BoardRows(minOf(top, boardRows), gap = false, you = false)
+        val room = boardRows - 1
+        val gap = top > 0 && room >= 2
+        return BoardRows(minOf(top, room - if (gap) 1 else 0), gap, you = true)
+    }
+
+    data class BoardRows(val top: Int, val gap: Boolean, val you: Boolean)
+
     companion object {
         const val COLUMNS = 10
         const val ROW = 18

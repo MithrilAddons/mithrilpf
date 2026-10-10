@@ -43,6 +43,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     private var draft = ""
     private var suggestions = listOf<CatalogItem>()
     private var highlighted = 0
+    private var dismissed = false
     private var scroll = 0
     private var shown = -1
     private var copiedUntil = 0L
@@ -95,7 +96,15 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             day.state == RoundState.PLAYING -> playing()
             day.finished ->
                 addRenderableWidget(
-                    FlatButton(right - 110, layout.cardY + 14, 100, copyLabel(), true) { copy(day) }
+                    FlatButton(
+                        right - layout.copyWidth - 10,
+                        layout.cardY + 14,
+                        layout.copyWidth,
+                        copyLabel(),
+                        true,
+                    ) {
+                        copy(day)
+                    }
                 )
             else -> Unit
         }
@@ -111,6 +120,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
         box.setResponder {
             draft = it
             notice = null
+            dismissed = false
             refreshSuggestions()
         }
         input = addRenderableWidget(box)
@@ -140,6 +150,10 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     }
 
     private fun refreshSuggestions() {
+        if (dismissed) {
+            suggestions = emptyList()
+            return
+        }
         val guessed = games.today?.guesses.orEmpty().map { it.item }.toSet()
         suggestions =
             if (CuratorSearch.exact(games.catalog?.items.orEmpty(), draft) != null) emptyList()
@@ -206,7 +220,11 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             GLFW.GLFW_KEY_UP ->
                 if (open) highlighted = (highlighted - 1 + suggestions.size) % suggestions.size
             GLFW.GLFW_KEY_TAB -> if (open) submit(pickOnly = true)
-            GLFW.GLFW_KEY_ESCAPE -> if (open) suggestions = emptyList()
+            GLFW.GLFW_KEY_ESCAPE ->
+                if (open) {
+                    suggestions = emptyList()
+                    dismissed = true
+                }
             else -> return false
         }
         return open || key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER
@@ -237,12 +255,14 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
 
     private fun suggestionAt(x: Int, y: Int): Int? {
         val box = input ?: return null
-        if (suggestions.isEmpty() || x !in box.x until box.x + dropdownWidth()) return null
+        if (!dropdownOpen() || x !in box.x until box.x + dropdownWidth()) return null
         val top = box.y - 1 - suggestions.size * SUGGESTION
         return ((y - top) / SUGGESTION).takeIf { y >= top && it in suggestions.indices }
     }
 
     private fun dropdownWidth() = minOf(200, input?.width ?: 200)
+
+    private fun dropdownOpen() = suggestions.isNotEmpty() && input?.isFocused == true
 
     override fun extractRenderState(
         g: GuiGraphicsExtractor,
@@ -302,18 +322,34 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             status(g, text("next_in", countdown(day)), Palette.MUTED)
             return null
         }
-        val number = text("number", day.number ?: 0)
-        g.text(font, number, layout.pageX, layout.top + 6, Palette.TEXT, false)
-        val count =
-            text(if (layout.wide) "guesses" else "guesses.short", day.guesses.size, day.limit)
-        val countX = layout.pageX + font.width(number) + 8
-        g.text(font, count, countX, layout.top + 6, Palette.MUTED, false)
+        heading(
+            text("number", day.number ?: 0),
+            text(if (layout.wide) "guesses" else "guesses.short", day.guesses.size, day.limit),
+            g,
+        )
         headers(g)
         val tooltip = rows(g, day, mouseX, mouseY) ?: headerTooltip(mouseX, mouseY)
         // After the reset, the Load button takes the result card's place.
         if (day.finished && !games.newDay) card(g, day)
         else status(g, statusLine(day, mouseX, mouseY), statusColor())
         return tooltip
+    }
+
+    /** A title and a muted detail, cut to fit left of the Today and Leaderboard buttons. */
+    private fun heading(title: Component, detail: Component, g: GuiGraphicsExtractor) {
+        val room = layout.headingWidth
+        val shown = font.plainSubstrByWidth(title.string, room)
+        g.text(font, shown, layout.pageX, layout.top + 6, Palette.TEXT, false)
+        val left = room - font.width(shown) - 8
+        if (left > 0)
+            g.text(
+                font,
+                font.plainSubstrByWidth(detail.string, left),
+                layout.pageX + font.width(shown) + 8,
+                layout.top + 6,
+                Palette.MUTED,
+                false,
+            )
     }
 
     private fun statusColor() =
@@ -374,6 +410,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
 
     private fun hoveredRow(day: CuratorDay, mouseX: Int, mouseY: Int): Int? {
         if (mouseX !in layout.gridX until layout.gridX + layout.gridWidth) return null
+        if (suggestionAt(mouseX, mouseY) != null) return null
         val range = window(day)
         val slot = (mouseY - layout.rowsY).floorDiv(GamesLayout.ROW)
         if (mouseY < layout.rowsY || (mouseY - layout.rowsY) % GamesLayout.ROW >= 16) return null
@@ -506,28 +543,42 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
         g.fill(x + 8, y + 14, x + 28, y + 34, Palette.SURFACE_RAISED)
         g.item(stack(answer.item, answer.icon), x + 10, y + 16)
         val color = Palette.rarity(answer.values.rarity)
-        val nameWidth = if (layout.wide) 160 else 110
-        g.text(font, font.plainSubstrByWidth(answer.name, nameWidth), x + 34, y + 14, color, false)
-        val kind =
-            listOfNotNull(answer.values.rarity, answer.values.type).joinToString(" ") {
-                it.replace('_', ' ')
-            }
-        g.text(font, font.plainSubstrByWidth(kind, nameWidth), x + 34, y + 25, color, false)
         val stats = day.stats
+        val split = layout.cardSplit
+        if (split) {
+            val nameWidth = layout.cardNameWidth
+            g.text(
+                font,
+                font.plainSubstrByWidth(answer.name, nameWidth),
+                x + 34,
+                y + 14,
+                color,
+                false,
+            )
+            val kind =
+                listOfNotNull(answer.values.rarity, answer.values.type).joinToString(" ") {
+                    it.replace('_', ' ')
+                }
+            g.text(font, font.plainSubstrByWidth(kind, nameWidth), x + 34, y + 25, color, false)
+        }
         val lines =
             listOfNotNull(
+                // Too narrow for two columns: the name leads the stats and Played is left out.
+                if (split) null else Component.literal(answer.name) to color,
                 if (day.state == RoundState.SOLVED)
                     text("solved", day.guesses.size, day.limit) to Palette.SUCCESS
                 else text("not_solved", day.limit) to Palette.DANGER,
                 stats?.let { text("streak", it.streak, it.bestStreak) to Palette.MUTED },
-                stats?.let {
-                    val rate = if (it.played == 0) 0 else it.solved * 100 / it.played
-                    text("played", it.played, rate) to Palette.MUTED
-                },
+                stats
+                    ?.takeIf { split }
+                    ?.let {
+                        val rate = if (it.played == 0) 0 else it.solved * 100 / it.played
+                        text("played", it.played, rate) to Palette.MUTED
+                    },
                 text("next_in", countdown(day)) to Palette.MUTED,
             )
-        val textX = x + 34 + nameWidth + 12
-        val room = x + w - 118 - textX
+        val textX = x + layout.cardTextX
+        val room = layout.cardTextWidth
         lines.forEachIndexed { i, (line, lineColor) ->
             g.text(
                 font,
@@ -571,15 +622,10 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             )
             return
         }
-        val month = monthName(board.season)
-        g.text(font, text("season", month), layout.pageX, layout.top + 6, Palette.TEXT, false)
-        g.text(
-            font,
+        heading(
+            text("season", monthName(board.season)),
             text("season.day", board.day, board.days),
-            layout.pageX + font.width(text("season", month)) + 8,
-            layout.top + 6,
-            Palette.MUTED,
-            false,
+            g,
         )
         val tableWidth = if (layout.wide) layout.pageWidth - 206 else layout.pageWidth
         table(g, board, tableWidth)
@@ -598,12 +644,10 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
             val label = text(key)
             g.text(font, label, x + columns[i] - font.width(label), y, Palette.MUTED, false)
         }
-        val rows = board.top + listOfNotNull(board.you)
-        val visible = ((layout.bottom - 14 - layout.rowsY) / GamesLayout.ROW).coerceAtLeast(1)
+        val plan = layout.board(board.top.size, board.you != null)
         var slot = 0
-        for (row in rows) {
-            if (slot >= visible) break
-            if (row === board.you) {
+        for (row in board.top.take(plan.top) + listOfNotNull(board.you)) {
+            if (row === board.you && plan.gap) {
                 g.text(font, "…", x + 26, layout.rowY(slot) + 4, Palette.MUTED, false)
                 slot++
             }
@@ -629,7 +673,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
                 }
             slot++
         }
-        if (board.top.isEmpty())
+        if (board.top.isEmpty() && board.you == null)
             g.text(font, text("no_players"), x + 26, layout.rowY(0) + 4, Palette.MUTED, false)
     }
 
@@ -659,7 +703,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
         val base = bottom - 26
         val most = (stats.histogram.maxOrNull() ?: 0).coerceAtLeast(1)
         val height = (base - histogramTop - 14).coerceAtLeast(4)
-        stats.histogram.forEachIndexed { i, count ->
+        stats.histogram.take(10).forEachIndexed { i, count ->
             val barX = x + 10 + i * 18
             val barHeight = count * height / most
             if (barHeight > 0) g.fill(barX, base - barHeight, barX + 14, base, Palette.MATCH)
@@ -671,7 +715,11 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
     }
 
     private fun monthName(season: String) =
-        Month.of(season.substring(5, 7).toInt()).getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+        Month.of(season.substring(5, 7).toInt())
+            .getDisplayName(
+                TextStyle.FULL,
+                Locale.forLanguageTag(minecraft.languageManager.selected.replace('_', '-')),
+            )
 
     private fun nextSeason(season: String): String {
         val month = season.substring(5, 7).toInt()
@@ -681,7 +729,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
 
     private fun dropdown(g: GuiGraphicsExtractor) {
         val box = input ?: return
-        if (suggestions.isEmpty() || !box.isFocused) return
+        if (!dropdownOpen()) return
         val w = dropdownWidth()
         val top = box.y - 1 - suggestions.size * SUGGESTION
         g.fill(box.x, top - 1, box.x + w, box.y - 1, Palette.BORDER)
