@@ -8,6 +8,7 @@ import dev.mithril.mithrilpf.dungeontimer.TrackingSettings
 import dev.mithril.mithrilpf.finder.DungeonRole
 import dev.mithril.mithrilpf.finder.FinderMetric
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.client.gui.ComponentPath
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractScrollArea
 import net.minecraft.client.gui.components.EditBox
@@ -20,6 +21,7 @@ import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.locale.Language
 import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.FormattedText
 
 class PartyFinderScreen(
     private val parent: Screen?,
@@ -76,7 +78,7 @@ class PartyFinderScreen(
         tabs.arrangeElements()
         tabs.setPosition(
             layout.contentX + if (layout.wide) 96 else 0,
-            layout.panel.y + if (layout.wide) 2 else 26,
+            layout.panel.y + if (layout.wide) 2 else 22,
         )
         tabs.visitWidgets { addRenderableWidget(it) }
         val page =
@@ -88,7 +90,7 @@ class PartyFinderScreen(
                                 layout,
                                 draft,
                                 editing,
-                                ::rebuildWidgets,
+                                ::rebuildPreservingScroll,
                                 {
                                     editor = null
                                     rebuildWidgets()
@@ -96,7 +98,7 @@ class PartyFinderScreen(
                                 {
                                     editor = null
                                     navigation.tab = FinderTab.PARTY
-                                    rebuildWidgets()
+                                    if (minecraft.screen === this) rebuildWidgets()
                                 },
                                 { floor ->
                                     finderDraft(floor)
@@ -134,7 +136,7 @@ class PartyFinderScreen(
                 MithrilPF.finder,
                 layout,
                 navigation,
-                ::rebuildWidgets,
+                ::rebuildPreservingScroll,
                 {
                     editing = false
                     finderDraft(MithrilPF.finder.floor)
@@ -142,7 +144,7 @@ class PartyFinderScreen(
                 },
                 {
                     navigation.tab = FinderTab.PARTY
-                    rebuildWidgets()
+                    if (minecraft.screen === this) rebuildWidgets()
                 },
             )
             .build()
@@ -188,7 +190,7 @@ class PartyFinderScreen(
                 MithrilPF.finder,
                 layout,
                 navigation,
-                ::rebuildWidgets,
+                ::rebuildPreservingScroll,
                 {
                     MithrilPF.finder.state?.party?.let { party ->
                         editor = FinderDraft(party.floor, party)
@@ -566,11 +568,79 @@ class PartyFinderScreen(
         if (changed) scroll.arrangeElements()
     }
 
+    /**
+     * Rebuilds for new data or a click without losing the reader's place: every scroll area keeps
+     * its position, and focus stays on the same control when the page has the same controls. A
+     * callback finishing after the screen closed changes nothing.
+     */
     private fun rebuildPreservingScroll() {
-        var amount = 0.0
-        scroll.visitWidgets { if (it is AbstractScrollArea) amount = it.scrollAmount() }
+        if (minecraft.screen !== this) return
+        // An area scrolled to its end (such as chat at the newest message) stays at its end.
+        val amounts =
+            scrollAreas().map {
+                if (it.maxScrollAmount() > 0 && it.scrollAmount() >= it.maxScrollAmount())
+                    Double.MAX_VALUE
+                else it.scrollAmount()
+            }
+        val before = leaves()
+        val focus = focusedLeaf()?.takeUnless { it is FinderTabButton }?.let(before::indexOf) ?: -1
         rebuildWidgets()
-        scroll.visitWidgets { if (it is AbstractScrollArea) it.setScrollAmount(amount) }
+        val after = leaves()
+        if (focus >= 0 && after.size == before.size) pathTo(after[focus], this)?.let(::changeFocus)
+        scrollAreas().forEachIndexed { i, area ->
+            amounts.getOrNull(i)?.let {
+                area.setScrollAmount(it.coerceAtMost(area.maxScrollAmount().toDouble()))
+            }
+        }
+    }
+
+    private fun scrollAreas(): List<AbstractScrollArea> =
+        descendants(this).filterIsInstance<AbstractScrollArea>()
+
+    private fun leaves(): List<GuiEventListener> =
+        descendants(this).filter { it !is ContainerEventHandler }
+
+    private fun descendants(parent: ContainerEventHandler): List<GuiEventListener> =
+        parent.children().flatMap { child ->
+            listOf(child) + ((child as? ContainerEventHandler)?.let(::descendants) ?: emptyList())
+        }
+
+    private fun pathTo(target: GuiEventListener, parent: ContainerEventHandler): ComponentPath? {
+        for (child in parent.children()) {
+            if (child === target) return ComponentPath.path(parent, ComponentPath.leaf(child))
+            if (child is ContainerEventHandler)
+                pathTo(target, child)?.let {
+                    return ComponentPath.path(parent, it)
+                }
+        }
+        return null
+    }
+
+    // Vanilla gives the wheel to the outer scroll area only, so lists inside it never scrolled.
+    override fun mouseScrolled(
+        mouseX: Double,
+        mouseY: Double,
+        scrollX: Double,
+        scrollY: Double,
+    ): Boolean =
+        innermostScroll(this, mouseX, mouseY)?.mouseScrolled(mouseX, mouseY, scrollX, scrollY)
+            ?: super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)
+
+    private fun innermostScroll(
+        parent: ContainerEventHandler,
+        x: Double,
+        y: Double,
+    ): AbstractScrollArea? {
+        for (child in parent.children()) {
+            if (!child.isMouseOver(x, y)) continue
+            (child as? ContainerEventHandler)
+                ?.let { innermostScroll(it, x, y) }
+                ?.let {
+                    return it
+                }
+            if (child is AbstractScrollArea && child.maxScrollAmount() > 0) return child
+        }
+        return null
     }
 
     override fun extractRenderState(
@@ -579,7 +649,7 @@ class PartyFinderScreen(
         mouseY: Int,
         delta: Float,
     ) {
-        g.fill(0, 0, width, height, 0xC0101114.toInt())
+        g.fill(0, 0, width, height, Palette.SCRIM)
         val p = layout.panel
         g.fill(p.x, p.y, p.x + p.width, p.y + p.height, Palette.BORDER)
         g.fill(p.x + 1, p.y + 1, p.x + p.width - 1, p.y + p.height - 1, Palette.BACKGROUND)
@@ -648,16 +718,16 @@ class PartyFinderScreen(
                 ?: if (MithrilPF.finder.presetError) "editor.preset_error" else null
         errorKey?.let { error ->
             g.fill(
-                layout.contentX,
-                p.y + p.height - 22,
-                p.x + p.width - 8,
+                p.x + 1,
+                p.y + p.height - 21,
+                p.x + p.width - 1,
                 p.y + p.height - 1,
                 Palette.BACKGROUND,
             )
+            val message = ellipsize(text(error).string, layout.contentWidth, font::width)
             g.text(
                 font,
-                Language.getInstance()
-                    .getVisualOrder(font.substrByWidth(text(error), layout.contentWidth)),
+                Language.getInstance().getVisualOrder(FormattedText.of(message)),
                 layout.contentX,
                 p.y + p.height - 15,
                 Palette.DANGER,

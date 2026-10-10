@@ -201,6 +201,7 @@
   "finder.mithrilpf.browse.select": "Select a party to see its requirements and roster.",
   "finder.mithrilpf.browse.gone": "This party is no longer listed.",
   "finder.mithrilpf.browse.party": "%s’s party",
+  "finder.mithrilpf.browse.meta": "%s · %s/5 · S+ %s",
   "finder.mithrilpf.browse.requirements": "YOU VS REQUIREMENTS",
   "finder.mithrilpf.browse.no_rules": "No requirements for this slot.",
   "finder.mithrilpf.browse.compare": "%s %s %s · you %s",

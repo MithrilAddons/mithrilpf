@@ -5,6 +5,7 @@ import dev.mithril.mithrilpf.finder.FinderClient
 import dev.mithril.mithrilpf.finder.FinderMetric
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.components.EditBox
+import net.minecraft.client.gui.components.MultiLineTextWidget
 import net.minecraft.client.gui.layouts.LinearLayout
 import net.minecraft.client.gui.layouts.SpacerElement
 import net.minecraft.network.chat.Component
@@ -19,13 +20,21 @@ class FinderEditor(
     private val saved: () -> Unit,
     private val changeFloor: (String) -> Unit,
 ) {
+    private var errorLabel: MultiLineTextWidget? = null
+
     fun build(): LinearLayout =
         LinearLayout.vertical().spacing(10).apply {
             val heading = addChild(LinearLayout.horizontal().spacing(6))
+            heading.defaultCellSetting().alignVerticallyMiddle()
             heading.button(finderText("editor.parties"), 75, action = cancel)
-            heading.label(
-                finderText(if (editing) "editor.edit" else "editor.create", draft.floor),
-                (layout.pageWidth - 160).coerceAtLeast(70),
+            val title =
+                heading.label(
+                    finderText(if (editing) "editor.edit" else "editor.create", draft.floor),
+                    (layout.pageWidth - 160).coerceAtLeast(70),
+                )
+            // Reset sits at the right edge, not straight after the title text.
+            heading.addChild(
+                SpacerElement.width((layout.pageWidth - 158 - title.width).coerceAtLeast(0))
             )
             heading.button(finderText("editor.reset_short"), 65) {
                 draft.shared.clear()
@@ -98,6 +107,7 @@ class FinderEditor(
         values: MutableMap<FinderMetric, String>,
         width: Int,
         columns: Boolean = false,
+        changed: () -> Unit = {},
     ) {
         val row = if (columns) page.addChild(LinearLayout.horizontal().spacing(6)) else page
         val fieldWidth = if (columns) (width - 12) / 3 else width
@@ -155,7 +165,13 @@ class FinderEditor(
                                 else "editor.any"
                             )
                         )
-                        setResponder { values[metric] = it }
+                        setResponder {
+                            values[metric] = it
+                            // The error is about the last Publish; editing a value clears it.
+                            draft.error = null
+                            errorLabel?.visible = false
+                            changed()
+                        }
                     }
             controls.button(Component.literal("+"), 18) {
                 input.value = steppedRequirement(metric, input.value, 1)
@@ -190,19 +206,17 @@ class FinderEditor(
     }
 
     private fun classRules(form: LinearLayout, width: Int) {
-        val classCount =
-            draft.perClass.values.sumOf { values -> values.count { it.value.isNotBlank() } } +
-                draft.exempt.size
-        form.button(
+        fun label() =
             finderText(
                 if (draft.classesExpanded) "editor.classes_close" else "editor.classes_open",
-                classCount,
-            ),
-            width,
-        ) {
-            draft.classesExpanded = !draft.classesExpanded
-            rebuild()
-        }
+                draft.perClass.values.sumOf { values -> values.count { it.value.isNotBlank() } } +
+                    draft.exempt.size,
+            )
+        val toggle =
+            form.button(label(), width) {
+                draft.classesExpanded = !draft.classesExpanded
+                rebuild()
+            }
         if (draft.classesExpanded) {
             val classes = form.addChild(LinearLayout.horizontal().spacing(3))
             for (role in DungeonRole.entries) classes.addChild(
@@ -222,7 +236,9 @@ class FinderEditor(
                 FinderMetric.entries.toList(),
                 draft.perClass.getOrPut(role) { mutableMapOf() },
                 width,
-            )
+            ) {
+                toggle.message = label()
+            }
             form.button(
                 finderText(
                     "editor.class_exempt",
@@ -238,19 +254,20 @@ class FinderEditor(
     }
 
     private fun blockedPlayers(form: LinearLayout, width: Int) {
-        form.button(
+        fun label() =
             finderText(
                 if (draft.blocksExpanded) "editor.blocks_close" else "editor.blocks_open",
                 draft.blocked.size + draft.names.split(Regex("[\\s,]+")).count { it.isNotBlank() },
-            ),
-            width,
-        ) {
-            draft.blocksExpanded = !draft.blocksExpanded
-            rebuild()
-        }
+            )
+        val toggle =
+            form.button(label(), width) {
+                draft.blocksExpanded = !draft.blocksExpanded
+                rebuild()
+            }
         if (draft.blocksExpanded) {
             form.input(finderText("editor.block"), width, draft.names, 1700) {
                 draft.names = it
+                toggle.message = label()
             }
             for ((uuid, name) in draft.blocked) form.button(
                 finderText("editor.unblock", name),
@@ -263,21 +280,34 @@ class FinderEditor(
     }
 
     private fun publishControls(form: LinearLayout, width: Int) {
-        draft.error?.let {
-            form.label(
-                finderText("editor.invalid", finderText("metric.${it.key}")),
-                width,
-                Palette.DANGER,
-            )
-        }
+        errorLabel =
+            draft.error?.let {
+                form.label(
+                    finderText("editor.invalid", finderText("metric.${it.key}")),
+                    width,
+                    Palette.DANGER,
+                )
+            }
         if (draft.invalidNames)
             form.label(finderText("editor.invalid_names"), width, Palette.DANGER)
         val rolesValid = !draft.duplicates || draft.leader in draft.slots
         if (!rolesValid) form.label(finderText("editor.missing_leader"), width, Palette.DANGER)
+        val later =
+            MultiLineTextWidget(
+                    finderText("editor.edit_later").copy().withStyle {
+                        it.withColor(Palette.MUTED and 0xFFFFFF)
+                    },
+                    Minecraft.getInstance().font,
+                )
+                .setMaxWidth(width)
         if (layout.wide) {
+            // Pushes Publish to the bottom. The heading row (30) and everything after the spacer
+            // (three 9-unit gaps, the 20-unit button and the note) still have to fit.
             form.arrangeElements()
             form.addChild(
-                SpacerElement.height((layout.contentHeight - form.height - 80).coerceAtLeast(0))
+                SpacerElement.height(
+                    (layout.contentHeight - 30 - form.height - 47 - later.height).coerceAtLeast(0)
+                )
             )
         }
         form.button(
@@ -297,7 +327,7 @@ class FinderEditor(
                     if (success) saved() else rebuild()
                 }
         }
-        form.label(finderText("editor.edit_later"), width, Palette.MUTED)
+        form.addChild(later)
     }
 
     private fun duplicateSlots(form: LinearLayout, width: Int) {

@@ -2,6 +2,7 @@ package dev.mithril.mithrilpf.ui
 
 import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
+import dev.mithril.mithrilpf.mixin.BossHealthOverlayAccessor
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry
 import net.minecraft.client.Minecraft
 import net.minecraft.resources.Identifier
@@ -14,6 +15,7 @@ object FinderHud {
                 client.level == null ||
                     client.screen != null ||
                     client.options.hideGui ||
+                    client.options.keyPlayerList.isDown ||
                     !DungeonTimers.settings.finderHud
             )
                 return@addLast
@@ -38,8 +40,11 @@ object FinderHud {
                     ?: return@addLast
             val width = client.font.width(message) + 12
             val x = (client.window.guiScaledWidth - width) / 2
-            g.fill(x, 6, x + width, 24, Palette.BACKGROUND)
-            g.text(client.font, message, x + 6, 11, Palette.ACCENT, false)
+            val bars =
+                (client.gui.bossOverlay as BossHealthOverlayAccessor).`mithrilpf$events`().size
+            val y = finderHudTop(bars, client.window.guiScaledHeight)
+            g.fill(x, y, x + width, y + 18, Palette.BACKGROUND)
+            g.text(client.font, message, x + 6, y + 5, Palette.ACCENT, false)
         }
     }
 }

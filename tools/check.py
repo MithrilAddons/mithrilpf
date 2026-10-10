@@ -71,9 +71,11 @@ def verify_jar(path):
             if helper.read("META-INF/licenses/LICENSE_mithrilpf") != (ROOT / "LICENSE").read_bytes():
                 raise ValueError("Updater license mismatch")
         mixins = json.loads(jar.read("mithrilpf.mixins.json"))
-        if mixins["client"] != ["DungeonConnectionMixin"]:
+        # One passive packet observer, plus a read-only accessor for the boss bar count.
+        if mixins["client"] != ["BossHealthOverlayAccessor", "DungeonConnectionMixin"]:
             raise ValueError("Unexpected packet hooks")
         jar.read("dev/mithril/mithrilpf/mixin/DungeonConnectionMixin.class")
+        jar.read("dev/mithril/mithrilpf/mixin/BossHealthOverlayAccessor.class")
         jar.read("META-INF/licenses/LICENSE_noamm")
         for entries in metadata["entrypoints"].values():
             for entry in entries:
