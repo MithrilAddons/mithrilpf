@@ -8,7 +8,13 @@ enum class LinkAction {
 }
 
 /** Opening alternatives changes presentation only, not the pending login attempt. */
-data class LinkOptions(val action: LinkAction, val showAlternatives: Boolean, val code: String?) {
+data class LinkOptions(
+    val action: LinkAction,
+    val showAlternatives: Boolean,
+    val code: String?,
+    /** Other-device options only exist while a link is pending. */
+    val canExpand: Boolean,
+) {
     companion object {
         fun from(expanded: Boolean, hasLink: Boolean, status: String, code: String?): LinkOptions {
             val show = expanded && hasLink
@@ -20,6 +26,7 @@ data class LinkOptions(val action: LinkAction, val showAlternatives: Boolean, va
                 },
                 show,
                 code?.takeIf { show },
+                hasLink,
             )
         }
     }
