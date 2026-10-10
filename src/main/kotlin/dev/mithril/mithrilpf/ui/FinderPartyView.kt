@@ -178,6 +178,7 @@ class FinderPartyView(
     private fun chat(root: LinearLayout, width: Int, party: FinderParty) {
         val chat = root.addChild(LinearLayout.vertical().spacing(8))
         val heading = chat.addChild(LinearLayout.horizontal().spacing(5))
+        heading.defaultCellSetting().alignVerticallyMiddle()
         heading.label(finderText("party.chat"), width - 110)
         heading.button(finderText("report.title"), 105, enabled = !finder.busy) {
             val client = Minecraft.getInstance()

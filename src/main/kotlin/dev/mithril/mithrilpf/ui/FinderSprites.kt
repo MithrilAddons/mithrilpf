@@ -37,7 +37,9 @@ class FinderRoleButton(
     }
 
     override fun extractContents(g: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, delta: Float) {
-        g.fill(x, y, right, bottom, if (isHoveredOrFocused) Palette.ACCENT else Palette.BORDER)
+        // Locked choices (such as your class while editing a party) never look clickable.
+        val highlighted = active && isHoveredOrFocused
+        g.fill(x, y, right, bottom, if (highlighted) Palette.ACCENT else Palette.BORDER)
         g.fill(
             x + 1,
             y + 1,

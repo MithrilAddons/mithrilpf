@@ -3,6 +3,9 @@ package dev.mithril.mithrilpf.ui
 /** Shared visual identity with mithril.foo; uses the active Minecraft/resource-pack font. */
 object Palette {
     val BACKGROUND = 0xFF101114.toInt()
+
+    /** BACKGROUND at 75% opacity, behind full-screen panels. */
+    val SCRIM = 0xC0101114.toInt()
     val SURFACE = 0xFF17181D.toInt()
     val SURFACE_RAISED = 0xFF1E2027.toInt()
     val BORDER = 0xFF2A2C34.toInt()

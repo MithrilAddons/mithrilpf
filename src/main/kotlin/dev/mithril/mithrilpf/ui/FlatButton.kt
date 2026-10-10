@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.locale.Language
 import net.minecraft.network.chat.Component
+import net.minecraft.network.chat.FormattedText
 
 class FlatButton(
     x: Int,
@@ -27,9 +28,8 @@ class FlatButton(
         g.fill(x, y, x + width, y + height, colors.border)
         g.fill(x + 1, y + 1, x + width - 1, y + height - 1, colors.background)
         val font = Minecraft.getInstance().font
-        val text =
-            Language.getInstance()
-                .getVisualOrder(font.substrByWidth(message, (width - 10).coerceAtLeast(0)))
+        val label = ellipsize(message.string, (width - 10).coerceAtLeast(0), font::width)
+        val text = Language.getInstance().getVisualOrder(FormattedText.of(label))
         g.text(
             font,
             text,

@@ -99,7 +99,7 @@ class FinderPartyRow(
         val slotX = right - 78
         avatar.draw(g, x + 6, y + 3)
         line(
-            Component.literal("${party.leader} · ${party.slots.count { it.filled }}/5"),
+            message,
             x + 23,
             y + 5,
             width - 105,

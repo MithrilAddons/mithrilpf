@@ -82,8 +82,11 @@ class FinderBrowse(
     private fun detail(page: LinearLayout, party: FinderParty, width: Int) {
         page.label(finderText("browse.party", party.leader), width)
         page.label(
-            Component.literal(
-                "${party.floor} · ${party.slots.count { it.filled }}/5 · S+ ${metricText(FinderMetric.S_PLUS, party.averageTime)}"
+            finderText(
+                "browse.meta",
+                party.floor,
+                party.slots.count { it.filled },
+                metricText(FinderMetric.S_PLUS, party.averageTime),
             ),
             width,
             Palette.MUTED,
@@ -198,6 +201,7 @@ class FinderBrowse(
                     )
             }
         val limit = left.addChild(LinearLayout.horizontal().spacing(5))
+        limit.defaultCellSetting().alignVerticallyMiddle()
         limit.label(finderText("browse.maximum"), leftWidth - 65, Palette.MUTED)
         limit
             .addChild(EditBox(Minecraft.getInstance().font, 60, 18, finderText("browse.maximum")))
@@ -242,10 +246,14 @@ class FinderBrowse(
                 else ->
                     finder.listings.sortedByDescending { party -> party.slots.count { it.filled } }
             }
-        val groups = sorted.partition { eligible(it).isNotEmpty() }
+        // Until your stats load nobody can say which parties you can join, so none are hidden.
+        val known = finder.state?.stats != null
+        val groups =
+            if (known) sorted.partition { eligible(it).isNotEmpty() } else sorted to emptyList()
         val rows = LinearLayout.vertical().spacing(5)
         val rowWidth = if (layout.wide) leftWidth - 20 else leftWidth
-        rows.label(finderText("browse.available", groups.first.size), rowWidth, Palette.MUTED)
+        if (known)
+            rows.label(finderText("browse.available", groups.first.size), rowWidth, Palette.MUTED)
         for (party in groups.first) row(rows, party, rowWidth)
         if (finder.listings.isEmpty() && finder.state != null)
             rows.label(finderText("browse.empty"), rowWidth, Palette.MUTED)
