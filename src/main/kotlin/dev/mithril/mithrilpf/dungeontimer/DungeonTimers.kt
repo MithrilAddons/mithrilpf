@@ -3,6 +3,7 @@ package dev.mithril.mithrilpf.dungeontimer
 import dev.mithril.mithrilpf.soloclear.DungeonScore
 import dev.mithril.mithrilpf.soloclear.SoloClearState
 import dev.mithril.mithrilpf.soloroom.RoomDetector
+import dev.mithril.mithrilpf.soloroom.RoomPbGate
 import dev.mithril.mithrilpf.soloroom.RunMapCapture
 import dev.mithril.mithrilpf.soloroom.SoloRoomResult
 import dev.mithril.mithrilpf.soloroom.SoloRoomState
@@ -55,6 +56,15 @@ object DungeonTimers {
     private var ghost = false
     private var errorShown = false
     private var rooms: SoloRoomState? = null
+    private val roomHost =
+        RoomPbStorage(
+            { storage },
+            { Minecraft.getInstance().player?.uuid?.toString() },
+            { floor },
+        ) {
+            Minecraft.getInstance().player?.sendSystemMessage(it)
+        }
+    private var roomGate = RoomPbGate(roomHost)
     private var solo: SoloClearState? = null
     private var detector = RoomDetector()
     private var score = DungeonScore()
@@ -125,11 +135,15 @@ object DungeonTimers {
                     storage.records.forEach { (kind, players) ->
                         players[player].orEmpty().toSortedMap().forEach { (floor, splits) ->
                             splits.forEach { (name, best) ->
-                                ctx.source.sendFeedback(
-                                    Component.literal(
-                                        "$kind · $floor · ${splitName(name)}: ${DungeonTimeFormat.pair(SplitTime(best.realMillis, best.ticks))}"
+                                val text =
+                                    if (kind == "rooms") RoomPbGate.listing(name, best, splits)
+                                    else
+                                        "${splitName(name)}: ${DungeonTimeFormat.pair(SplitTime(best.realMillis, best.ticks))}"
+                                text?.let {
+                                    ctx.source.sendFeedback(
+                                        Component.literal("$kind · $floor · $it")
                                     )
-                                )
+                                }
                             }
                         }
                     }
@@ -160,7 +174,10 @@ object DungeonTimers {
         if (!ready) return
         if (settings.enabled && !value.enabled && started) invalidate()
         if (started && settings.paul != value.paul) solo?.invalidate("settings_changed")
-        if (started && settings.rooms && !value.rooms) rooms?.invalidate()
+        if (started && settings.rooms && !value.rooms) {
+            rooms?.invalidate()
+            roomGate.clear()
+        }
         if (started && settings.solo && !value.solo) solo?.invalidate("disabled")
         settings = value
         storage.settings(value)
@@ -196,6 +213,7 @@ object DungeonTimers {
         detector = RoomDetector()
         rooms = client.player?.gameProfile?.name?.let(::SoloRoomState)
         solo = client.player?.gameProfile?.name?.let(::SoloClearState)
+        roomGate = RoomPbGate(roomHost)
     }
 
     private fun invalidate() {
@@ -271,8 +289,8 @@ object DungeonTimers {
                         it,
                         stamp,
                         captureSolo,
-                    ) { name, times ->
-                        roomResult(name, times)
+                    ) {
+                        roomGate.results(it)
                     }
                 }
             } catch (e: Exception) {
@@ -281,6 +299,12 @@ object DungeonTimers {
             }
         } else rooms?.leave(stamp)
         recordCapture.sample(stamp, ghost, solo, score, state)
+        state?.let { timer ->
+            val entry = timer.completed[BOSS_ENTRY] ?: return@let
+            roomGate.bossEntry(rooms) {
+                score.estimate(entry.realMillis / 1000, true, settings.paul, timer.floor, true)
+            }
+        }
         if (settings.solo && solo?.active == true) {
             val timer = state ?: return
             val elapsed = timer.rows(stamp)["Total"] ?: return
@@ -289,6 +313,7 @@ object DungeonTimers {
                     elapsed.realMillis / 1000,
                     BOSS_ENTRY in timer.completed,
                     settings.paul,
+                    timer.floor,
                 )
             solo
                 ?.observe(
@@ -308,6 +333,7 @@ object DungeonTimers {
                         map = detector.snapshot(client, stamp, score.secretsFound, score.crypts),
                     )
                     record("solo", mapOf("300 Score" to time))
+                    roomGate.soloPassed(rooms)
                 }
         }
     }
@@ -364,6 +390,7 @@ object DungeonTimers {
                         detector.replay.teleport(System.nanoTime())
                     actionBar?.let { detector.observeSecrets(client, it, now()) }
                 }
+                actionBar?.let { text -> rooms?.let { detector.counter(client, it, text, now()) } }
                 team?.let { observeLines(listOf(it)) }
                 if (child is ClientboundPlayerInfoRemovePacket)
                     child.profileIds().forEach(tab::remove)
@@ -376,7 +403,7 @@ object DungeonTimers {
                     val name = client.player?.gameProfile?.name
                     if (rooms == null && name != null) rooms = SoloRoomState(name)
                     if (solo == null && name != null) solo = SoloClearState(name)
-                    rooms?.roster(participants)
+                    rooms?.roster(tab.values)
                     solo?.roster(participants)
                     if (
                         tab.values.any {
@@ -421,7 +448,7 @@ object DungeonTimers {
             score.tab(tab.values)
             if (rooms == null) rooms = SoloRoomState(player.gameProfile.name)
             if (solo == null) solo = SoloClearState(player.gameProfile.name)
-            rooms?.roster(participants)
+            rooms?.roster(tab.values)
             solo?.roster(participants)
             if (settings.rooms) rooms?.start()
             if (settings.solo) solo?.begin(floor, stamp)
@@ -519,30 +546,6 @@ object DungeonTimers {
                     .withStyle(ChatFormatting.GOLD)
             )
         return line
-    }
-
-    private fun roomResult(room: String, times: Map<String, SplitTime>) {
-        val client = Minecraft.getInstance()
-        val player = client.player?.uuid?.toString() ?: return
-        val floor = floor ?: return
-        storage.record("rooms", player, floor, times.mapKeys { "$room · ${it.key}" }) { old, _ ->
-            if (client.player?.uuid?.toString() != player) return@record
-            times.forEach { (split, time) ->
-                val result = SoloRoomResult.of(time.realMillis, old["$room · $split"]?.realMillis)
-                val line =
-                    message(
-                            "room_result",
-                            room,
-                            message(if (split == "Cleared") "clear" else "secrets"),
-                            Component.literal(result.timeText).withStyle {
-                                it.withColor(result.color)
-                            },
-                        )
-                        .withStyle { it.withColor(Palette.ACCENT and 0xFFFFFF) }
-                if (result.newPb) line.append(message("pb_suffix").withStyle(ChatFormatting.GOLD))
-                client.player?.sendSystemMessage(line)
-            }
-        }
     }
 
     fun bestTicks(floor: String, split: String): Long? =

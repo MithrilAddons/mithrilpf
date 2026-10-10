@@ -28,6 +28,31 @@ data class SoloRoomMap(val cornerX: Int, val cornerZ: Int, val size: Int) {
         return colors.getOrNull(z * 128 + x)?.toInt()?.and(255) ?: 0
     }
 
+    /**
+     * Tiles of the player markers other than yours. Your own marker is the one closest to your
+     * position; markers use the map decoration grid, two units per pixel, centred on 0.
+     */
+    fun teammateTiles(markers: List<Pair<Byte, Byte>>, selfX: Double, selfZ: Double): Set<Int> {
+        fun unit(world: Double, corner: Int) =
+            (corner + size / 2.0 + (world + 185) / 32 * (size + 4)) * 2 - 128
+        val x = unit(selfX, cornerX)
+        val z = unit(selfZ, cornerZ)
+        val others = markers.toMutableList()
+        others
+            .minByOrNull { (mx, mz) -> (mx - x) * (mx - x) + (mz - z) * (mz - z) }
+            ?.let(others::remove)
+        return others.mapNotNull { (mx, mz) -> markerTile(mx, mz) }.toSet()
+    }
+
+    private fun markerTile(x: Byte, z: Byte): Int? {
+        fun cell(unit: Byte, corner: Int) =
+            (((unit + 128) / 2.0 - corner - size / 2.0) / (size + 4)).roundToInt()
+        val column = cell(x, cornerX)
+        val row = cell(z, cornerZ)
+        if (column !in 0..5 || row !in 0..5) return null
+        return row * 6 + column
+    }
+
     companion object {
         fun calibrate(colors: ByteArray, floor: String): SoloRoomMap? {
             if (colors.size != 16384 || !Regex("E|[FM][1-7]").matches(floor)) return null

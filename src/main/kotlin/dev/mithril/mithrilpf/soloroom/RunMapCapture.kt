@@ -21,11 +21,7 @@ class RunMapCapture {
 
     fun observeSecrets(tile: Int?, text: String): Pair<Int, Int>? {
         if (tile == null || tile !in 0..35) return null
-        val match = secretCounter.find(text) ?: return null
-        val found = match.groupValues[1].toInt()
-        val total = match.groupValues[2].toInt()
-        if (total > 100 || found > total) return null
-        secrets[tile] = found to total
+        secrets[tile] = secretCount(text) ?: return null
         return secrets[tile]
     }
 
@@ -153,6 +149,14 @@ class RunMapCapture {
                 "(?<!\\d)(\\d{1,3})\\s*/\\s*(\\d{1,3})\\s+Secrets?\\b",
                 RegexOption.IGNORE_CASE,
             )
+
+        /** The action bar's "found/total Secrets" for the room you're standing in. */
+        fun secretCount(text: String): Pair<Int, Int>? {
+            val match = secretCounter.find(text) ?: return null
+            val found = match.groupValues[1].toInt()
+            val total = match.groupValues[2].toInt()
+            return if (total > 100 || found > total) null else found to total
+        }
 
         fun neighbors(tile: Int): List<Int> =
             listOfNotNull(

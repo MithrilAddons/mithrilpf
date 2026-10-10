@@ -48,7 +48,12 @@ class DungeonScoreTest {
             assertEquals(evidence, state.evidence(inBoss))
             assertEquals(
                 case["score"].takeUnless { it.isJsonNull }?.asInt,
-                state.estimate(case["elapsed_ms"].asLong / 1000, inBoss, case["paul"].asBoolean),
+                state.estimate(
+                    case["elapsed_ms"].asLong / 1000,
+                    inBoss,
+                    case["paul"].asBoolean,
+                    "F7",
+                ),
                 case["name"].asString,
             )
         }
@@ -78,13 +83,13 @@ class DungeonScoreTest {
     fun `missing mandatory observations never invent a score`() {
         val state = DungeonScore()
         state.start()
-        assertNull(state.estimate(100, false, false))
+        assertNull(state.estimate(100, false, false, "F7"))
         state.tab(listOf("Completed Rooms: 18", "Secrets Found: 100%", "Crypts: 5", "Puzzles: (0)"))
-        assertNull(state.estimate(100, false, false))
+        assertNull(state.estimate(100, false, false, "F7"))
         state.sidebar(listOf("Cleared: 0% (0)"))
-        assertNull(state.estimate(100, false, false))
+        assertNull(state.estimate(100, false, false, "F7"))
         state.sidebar(listOf("Cleared: 90% (0)"))
-        assertEquals(305, state.estimate(100, false, false))
+        assertEquals(305, state.estimate(100, false, false, "F7"))
     }
 
     @Test
@@ -92,52 +97,80 @@ class DungeonScoreTest {
         val state = DungeonScore()
         state.sidebar(listOf("Cleared: 90% (0)"))
         state.tab(listOf("Completed Rooms: 18", "Secrets Found: 100%", "Crypts: 5", "Puzzles: (0)"))
-        assertNull(state.estimate(100, false, false))
+        assertNull(state.estimate(100, false, false, "F7"))
         state.start()
-        assertEquals(305, state.estimate(100, false, false))
+        assertEquals(305, state.estimate(100, false, false, "F7"))
         state.tab(listOf("Deaths: (1)"))
-        assertEquals(304, state.estimate(100, false, false))
+        assertEquals(304, state.estimate(100, false, false, "F7"))
         state.tab(listOf("Deaths: 2"))
-        assertEquals(302, state.estimate(100, false, false))
+        assertEquals(302, state.estimate(100, false, false, "F7"))
         state.tab(listOf("Deaths: 0"))
         assertEquals(2, state.deaths)
     }
 
     @Test
+    fun `each floor has its own secret requirement and speed limit`() {
+        assertEquals(285, score(secrets = "50").estimate(600, false, false, "F7"))
+        assertEquals(293, score(secrets = "50").estimate(600, false, false, "F5"))
+        assertEquals(305, score(secrets = "50").estimate(600, false, false, "F1"))
+        assertEquals(305, score().estimate(700, false, false, "F7"))
+        assertEquals(296, score().estimate(700, false, false, "F1"))
+        assertEquals(287, score().estimate(700, false, false, "M1"))
+        assertEquals(305, score().estimate(1200, false, false, "E"))
+        assertNull(score().estimate(100, false, false, "F8"))
+    }
+
+    @Test
+    fun `the room PB gate can score a run as if nobody died`() {
+        val state = score()
+        state.tab(listOf("Deaths: 2", "Blaze: [✔]", "Ice Fill: [✔]"))
+        assertEquals(302, state.estimate(100, false, false, "F7"))
+        assertEquals(305, state.estimate(100, false, false, "F7", ignoreDeaths = true))
+        val unknown = DungeonScore()
+        unknown.sidebar(listOf("Cleared: 90% (0)"))
+        unknown.tab(
+            listOf("Completed Rooms: 18", "Secrets Found: 100%", "Crypts: 5", "Puzzles: (0)")
+        )
+        assertNull(unknown.estimate(100, false, false, "F7"))
+        assertEquals(305, unknown.estimate(100, false, false, "F7", ignoreDeaths = true))
+    }
+
+    @Test
     fun `score includes secrets puzzles crypt cap bonuses and explicit paul toggle`() {
-        assertEquals(305, score().estimate(600, false, false))
-        assertEquals(285, score(secrets = "50").estimate(600, false, false))
+        assertEquals(305, score().estimate(600, false, false, "F7"))
+        assertEquals(285, score(secrets = "50").estimate(600, false, false, "F7"))
         assertEquals(
             295,
-            score(puzzleRows = listOf("Blaze: [✔]", "Ice Fill: [✦]")).estimate(600, false, false),
+            score(puzzleRows = listOf("Blaze: [✔]", "Ice Fill: [✦]"))
+                .estimate(600, false, false, "F7"),
         )
-        assertEquals(301, score(crypts = 1).estimate(600, false, false))
-        assertEquals(305, score(crypts = 12).estimate(600, false, false))
+        assertEquals(301, score(crypts = 1).estimate(600, false, false, "F7"))
+        assertEquals(305, score(crypts = 12).estimate(600, false, false, "F7"))
         val state = score()
         state.chat("A PRINCE FALLS. +1 BONUS SCORE")
         state.chat("A Bat has been slain. +1 Bonus Score")
         state.chat("CHARM You charmed a Mimic and captured its shard.")
-        assertEquals(309, state.estimate(600, false, false))
-        assertEquals(319, state.estimate(600, false, true))
+        assertEquals(309, state.estimate(600, false, false, "F7"))
+        assertEquals(319, state.estimate(600, false, true, "F7"))
         state.chat("Party > FakeUser: 300 score! Mimic dead!")
-        assertEquals(309, state.estimate(600, false, false))
+        assertEquals(309, state.estimate(600, false, false, "F7"))
     }
 
     @Test
     fun `invalid numbers and inconsistent room data do not become a 300`() {
         for (value in listOf("NaN", "Infinity", "101", "-1", "1.2.3")) {
-            assertNull(score(secrets = value).estimate(0, false, false))
+            assertNull(score(secrets = value).estimate(0, false, false, "F7"))
         }
-        assertNull(score(completed = 0).estimate(0, false, false))
+        assertNull(score(completed = 0).estimate(0, false, false, "F7"))
         assertNull(
-            score(puzzleRows = listOf("A: [✔]", "B: [✔]", "C: [✔]")).estimate(0, false, false)
+            score(puzzleRows = listOf("A: [✔]", "B: [✔]", "C: [✔]")).estimate(0, false, false, "F7")
         )
     }
 
     @Test
     fun `watcher completion is not counted twice and speed falls after the limit`() {
         val state = score()
-        assertEquals(305, state.estimate(840, false, false))
+        assertEquals(305, state.estimate(840, false, false, "F7"))
         state.chat("[BOSS] The Watcher: You have proven yourself. You may pass.")
         state.sidebar(listOf("Cleared: 95% (0)"))
         state.tab(
@@ -150,8 +183,8 @@ class DungeonScoreTest {
                 "Ice Fill: [✔]",
             )
         )
-        assertEquals(305, state.estimate(840, false, false))
-        assertEquals(298, state.estimate(840, true, false))
-        assertTrue(state.estimate(1008, false, false)!! < 305)
+        assertEquals(305, state.estimate(840, false, false, "F7"))
+        assertEquals(298, state.estimate(840, true, false, "F7"))
+        assertTrue(state.estimate(1008, false, false, "F7")!! < 305)
     }
 }

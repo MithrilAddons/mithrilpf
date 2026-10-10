@@ -90,7 +90,13 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
 - Test HUD movement/scaling and settings persistence without creating preview PBs.
 - Enter a fresh dungeon: verify floor/roster detection, split boundaries, real/tick
   clocks during lag, normal/master separation and abandoned-run handling.
-- Clear a room, leave, return for secrets: only time in that room counts.
+- Clear a room, leave, return for secrets: only time in that room counts, and
+  secrets found after walking into another room are ignored.
+- In party runs, check that a teammate entering a room before it turns white
+  voids only that room's clear, a teammate present at a secret voids its secrets,
+  and midclear/regular lines match the threshold. Confirm secrets and Total show
+  "needs 300" until boss entry (or the solo 300 split) and are saved or dropped
+  with one line there. Compare `/mithrilpfpbs` rates and old solo room PBs.
 - Compare solo 300-score detection against server observations with and without
   Paul; test death and teammate invalidation.
 - Complete qualifying runs and verify history, three-sample estimates and fallback.

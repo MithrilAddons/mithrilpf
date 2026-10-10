@@ -19,6 +19,30 @@ class SoloRoomMapTest {
     }
 
     @Test
+    fun `teammate markers become tiles and the marker closest to you is yours`() {
+        val map = SoloRoomMap(5, 5, 16)
+        // Tile centres sit 20 pixels apart from pixel 13; markers count two units per pixel.
+        val self = (-102).toByte() to (-102).toByte()
+        val teammate = (-62).toByte() to (-102).toByte()
+        val offMap = 127.toByte() to 127.toByte()
+        assertEquals(setOf(1), map.teammateTiles(listOf(teammate, self, offMap), -185.0, -185.0))
+        assertEquals(
+            setOf(0),
+            map.teammateTiles(listOf(self, (-100).toByte() to (-102).toByte()), -185.0, -185.0),
+        )
+        assertEquals(emptySet(), map.teammateTiles(listOf(self), -185.0, -185.0))
+        val outside =
+            listOf(
+                self,
+                (-102).toByte() to 127.toByte(),
+                (-128).toByte() to (-102).toByte(),
+                (-102).toByte() to (-128).toByte(),
+            )
+        assertEquals(emptySet(), map.teammateTiles(outside, -185.0, -185.0))
+        assertEquals(emptySet(), map.teammateTiles(emptyList(), -185.0, -185.0))
+    }
+
+    @Test
     fun `invalid maps and truncated data cannot generate completion markers`() {
         assertNull(SoloRoomMap.calibrate(map(15), "F7"))
         assertNull(SoloRoomMap.calibrate(ByteArray(10), "F7"))
