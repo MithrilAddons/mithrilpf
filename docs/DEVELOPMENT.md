@@ -224,8 +224,18 @@ deploy its accepting validator before publishing this client. Older recordings
 use approximate teleport inference in the website.
 
 Solo attempts require an observed solo roster; a teammate or death invalidates
-the attempt. Room timers count only time spent inside that room, including the
-clear time in the secrets total. Normal/master floors remain separate.
+the attempt. Room PBs are tracked in solo and party runs and judged per room. A
+clear counts only if no living teammate was seen in the room before it turned
+white (loaded players first, then dungeon map markers). Secrets count only if the
+room's counter started at 0 and no teammate was there when it went up. A room is
+a midclear when half its secrets, rounded down and between 1 and 3, were found
+before white; clear and secrets PBs are kept per style and Total only for rooms
+finished with every secret. Secrets PBs are stored as time per secret and shown
+per minute. A white room is reported when it goes green or you walk into another
+room; coming back for more secrets reports it again, recounted over every visit. Room timers count only time spent inside that room. Secrets and
+Total wait for the 300 gate (the solo 300 Score split, or the boss-entry estimate
+with deaths ignored and per-floor secret and speed limits) and are otherwise
+dropped; room tracking stops once the gate is decided. Older solo secrets PBs become Total. Normal/master floors remain separate.
 Estimates use completed five-player runs with less than 20 seconds of lag and
 require three samples; M7 has fallback estimates before then. Unknown/missing
 observations do not create fabricated PBs. Room/map or server-format changes can

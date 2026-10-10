@@ -51,6 +51,11 @@ class TrackingStorage(
             for (kind in listOf("splits", "rooms", "solo")) {
                 bests[kind] = DungeonPersonalBests(directory.resolve(kind)).apply { load() }
             }
+            try {
+                bests.getValue("rooms").rename(::roomKey)
+            } catch (e: Exception) {
+                log.warn("Kept room PBs under their old names", e)
+            }
             history.load { file, ex -> log.warn("Ignoring invalid run {}", file.fileName, ex) }
             val snapshot = bests.mapValues { it.value.records }
             val stats = history.summaries()
@@ -131,5 +136,11 @@ class TrackingStorage(
     override fun close() {
         worker.shutdown()
         worker.awaitTermination(2, TimeUnit.SECONDS)
+    }
+
+    companion object {
+        /** Solo room secrets used to be timed from entry to green, which is now Total. */
+        internal fun roomKey(name: String) =
+            if (name.endsWith(" · Secrets")) name.removeSuffix(" · Secrets") + " · Total" else name
     }
 }

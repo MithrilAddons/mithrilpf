@@ -5,6 +5,8 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
@@ -70,6 +72,20 @@ class DungeonPersonalBestsTest {
         Files.writeString(file, tampered)
         assertFailsWith<IllegalArgumentException> { DungeonPersonalBests(directory).load() }
         assertEquals(tampered, Files.readString(file))
+    }
+
+    @Test
+    fun `renaming nothing leaves the file alone`() {
+        val store = DungeonPersonalBests(directory).apply { load() }
+        store.rename { it }
+        assertFalse(Files.exists(directory.resolve("dungeon-pbs.dat")))
+        store.record("alice", "M7", mapOf("Boss" to SplitTime(10000, 200)))
+        val file = directory.resolve("dungeon-pbs.dat")
+        val before = Files.getLastModifiedTime(file)
+        Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(0))
+        store.rename { it }
+        assertEquals(0, Files.getLastModifiedTime(file).toMillis())
+        assertNotEquals(0, before.toMillis())
     }
 
     @Test

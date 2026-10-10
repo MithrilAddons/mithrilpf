@@ -1,6 +1,5 @@
 package dev.mithril.mithrilpf.soloroom
 
-import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import java.util.IdentityHashMap
 import kotlinx.serialization.json.Json
@@ -10,6 +9,7 @@ import net.minecraft.core.component.DataComponents
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.saveddata.maps.MapId
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData
 
 /** Client-thread only. Maximum two loaded 129-block columns per tick; no network lookup. */
 class RoomDetector {
@@ -30,7 +30,7 @@ class RoomDetector {
         floor: String,
         now: TimerStamp,
         captureSolo: Boolean = false,
-        result: (String, Map<String, SplitTime>) -> Unit,
+        result: (List<RoomResult>) -> Unit,
     ) {
         val player = client.player ?: return
         if (captureSolo) runMap.times.observe(now, player.x, player.z)
@@ -53,38 +53,44 @@ class RoomDetector {
         identify(client, tile)
         identify(client, scan++ % 36)
         val id = player.inventory.getItem(8).get(DataComponents.MAP_ID) ?: mapId
-        val colors = id?.let { client.level?.getMapData(it)?.colors }
+        val data = id?.let { client.level?.getMapData(it) }
+        val colors = data?.colors
         if (colors != null && calibration == null && ticks >= nextCalibration) {
             nextCalibration = ticks + 20
             calibration = SoloRoomMap.calibrate(colors, floor)
         }
         val map = calibration
         if (!state.eligible) return
-        val room = rooms[tile]
-        val color = if (map != null && colors != null) map.color(colors, tile) else 0
-        if (room != null && room.tracked && color != 0 && color != 18) {
-            state.enter(
-                room.name,
-                color == 34 || color == 30,
-                color == 30 || room.secrets == 0,
-                now,
-            )
-        } else state.leave(now)
-        if (map == null || colors == null) return
-        rooms.forEachIndexed { index, definition ->
-            if (definition == null || !definition.tracked) return@forEachIndexed
-            val marker = map.color(colors, index)
-            if (marker == 34 || marker == 30) {
-                val times =
-                    state.observe(
-                        definition.name,
-                        true,
-                        marker == 30 && definition.secrets > 0,
-                        now,
-                    )
-                if (times.isNotEmpty()) result(definition.name, times)
-            }
+        val color = { index: Int ->
+            if (map != null && colors != null) map.color(colors, index) else 0
         }
+        val others = teammateTiles(client, state.teammates, map, data)
+        val results = state.tick(rooms.asList(), tile, color, others, now)
+        if (results.isNotEmpty()) result(results)
+    }
+
+    /** Where living teammates stand: loaded players, plus their markers on the dungeon map. */
+    private fun teammateTiles(
+        client: Minecraft,
+        teammates: Set<String>,
+        map: SoloRoomMap?,
+        data: MapItemSavedData?,
+    ): Set<Int> {
+        val player = client.player
+        if (teammates.isEmpty() || player == null) return emptySet()
+        val loaded =
+            client.level?.players().orEmpty().filter { other ->
+                other !== player && teammates.any { it.equals(other.gameProfile.name, true) }
+            }
+        val markers = data?.decorations?.map { it.x() to it.y() }.orEmpty()
+        return loaded.mapNotNull { SoloRoomMap.tile(it.x, it.z) }.toSet() +
+            map?.teammateTiles(markers, player.x, player.z).orEmpty()
+    }
+
+    /** The room secret counter, for room PBs in any run. */
+    fun counter(client: Minecraft, state: SoloRoomState, text: String, now: TimerStamp) {
+        val player = client.player ?: return
+        SoloRoomMap.tile(player.x, player.z)?.let { state.counter(rooms[it], text, now) }
     }
 
     fun observeSecrets(client: Minecraft, text: String, now: TimerStamp) {

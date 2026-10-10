@@ -4,7 +4,7 @@ import com.google.gson.JsonObject
 import kotlin.math.floor
 
 /**
- * Local projected F7/M7 score, including unfinished blood/boss. Adapted from Noamm (CC0). Missing
+ * Local projected score, including unfinished blood/boss. Adapted from Noamm (CC0). Missing
  * mandatory fields mean unknown, never a guessed 300.
  */
 class DungeonScore {
@@ -66,13 +66,21 @@ class DungeonScore {
         if (MIMIC.matches(text.trim())) mimic = true
     }
 
-    fun estimate(elapsedSeconds: Long, inBoss: Boolean, paul: Boolean): Int? {
+    /** [ignoreDeaths] scores the run as if nobody had died, for the room PB gate. */
+    fun estimate(
+        elapsedSeconds: Long,
+        inBoss: Boolean,
+        paul: Boolean,
+        floor: String,
+        ignoreDeaths: Boolean = false,
+    ): Int? {
+        val rule = FLOORS[floor] ?: return null
         val count = completed ?: return null
         val percent = cleared?.takeIf { it > 0 } ?: return null
         val secretPercent = secrets ?: return null
         val cryptCount = crypts ?: return null
         val puzzleCount = puzzles ?: return null
-        val deathCount = deaths ?: return null
+        val deathCount = if (ignoreDeaths) 0 else deaths ?: return null
         val total = floor(count / (percent / 100.0) + 0.4).toInt()
         if (total <= 0 || total < count || solved > puzzleCount) return null
         val effective =
@@ -92,9 +100,11 @@ class DungeonScore {
                 (if (paul) 10 else 0)
         return roomScore +
             skill +
-            floor(secretPercent * 0.4).toInt().coerceIn(0, 40) +
+            floor(secretPercent.coerceAtMost(rule.secrets) * 40 / rule.secrets)
+                .toInt()
+                .coerceIn(0, 40) +
             bonus +
-            speed(elapsedSeconds)
+            speed(elapsedSeconds, rule.limit)
     }
 
     /** Captured on the client thread, then serialized before leaving it. */
@@ -117,8 +127,8 @@ class DungeonScore {
     private fun integer(pattern: Regex, text: String) =
         pattern.matchEntire(text)?.groupValues?.get(1)?.toIntOrNull()
 
-    private fun speed(seconds: Long): Int {
-        var over = ((seconds - 840).coerceAtLeast(0) * 100.0 / 840)
+    private fun speed(seconds: Long, limit: Int): Int {
+        var over = ((seconds - limit).coerceAtLeast(0) * 100.0 / limit)
         var deduction = 0.0
         for ((cap, divisor) in SPEED_PENALTIES) {
             val used = over.coerceAtMost(cap)
@@ -143,5 +153,27 @@ class DungeonScore {
                 RegexOption.IGNORE_CASE,
             )
         private val SPEED_PENALTIES = listOf(20.0 to 2.0, 20.0 to 3.5, 10.0 to 4.0, 10.0 to 5.0)
+
+        /** Secret percentage for full secret score, and the speed limit in seconds. */
+        private class FloorRule(val secrets: Double, val limit: Int)
+
+        private val FLOORS =
+            mapOf(
+                "E" to FloorRule(30.0, 1200),
+                "F1" to FloorRule(30.0, 600),
+                "F2" to FloorRule(40.0, 600),
+                "F3" to FloorRule(50.0, 600),
+                "F4" to FloorRule(60.0, 720),
+                "F5" to FloorRule(70.0, 600),
+                "F6" to FloorRule(85.0, 720),
+                "F7" to FloorRule(100.0, 840),
+                "M1" to FloorRule(100.0, 480),
+                "M2" to FloorRule(100.0, 480),
+                "M3" to FloorRule(100.0, 480),
+                "M4" to FloorRule(100.0, 480),
+                "M5" to FloorRule(100.0, 480),
+                "M6" to FloorRule(100.0, 600),
+                "M7" to FloorRule(100.0, 840),
+            )
     }
 }
