@@ -103,7 +103,7 @@ object DungeonTimers {
         val client = Minecraft.getInstance()
         RoomDetector.prepare()
         storage =
-            TrackingStorage(FabricLoader.getInstance().configDir.resolve("mithrilpf")) {
+            TrackingStorage(FabricLoader.getInstance().configDir.resolve("mithrilpf"), ::notice) {
                 client.execute(it)
             }
         storage.load { settings = it }
@@ -235,6 +235,10 @@ object DungeonTimers {
         if (started && previous != floor) invalidate()
         score.sidebar(cleaned)
     }
+
+    // Shown in chat even when the failure happens outside a world.
+    private fun notice(key: String) =
+        Minecraft.getInstance().gui.chat.addClientSystemMessage(message(key))
 
     private fun tick(client: Minecraft) {
         if (world !== client.level) reset()
@@ -457,7 +461,7 @@ object DungeonTimers {
                 solo?.invalidate("left")
             }
         }
-        if (text.contains("EXTRA STATS")) {
+        if (DungeonTimerState.extraStats(text)) {
             capture = null
             if (state?.ended != true) state = null
             rooms?.invalidate()

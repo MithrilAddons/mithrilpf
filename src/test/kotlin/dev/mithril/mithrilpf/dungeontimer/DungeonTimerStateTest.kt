@@ -25,6 +25,21 @@ class DungeonTimerStateTest {
     private val end = "   ☠ Defeated Necron in 7m 12s (NEW RECORD!)"
 
     @Test
+    fun `only Hypixel's own EXTRA STATS line ends a run`() {
+        val hypixel = "§f                             §6> §e§lEXTRA STATS §6<"
+        assertTrue(DungeonTimerState.extraStats(DungeonTimerState.clean(hypixel)))
+        assertTrue(DungeonTimerState.extraStats("> EXTRA STATS <"))
+        for (chat in
+            listOf(
+                "Party > [MVP+] Acrohh: EXTRA STATS",
+                "Party > [MVP+] Acrohh: > EXTRA STATS <",
+                "[312] [MVP+] Acrohh: > EXTRA STATS <",
+                "From [MVP+] Acrohh: EXTRA STATS",
+                "EXTRA STATS",
+            )) assertFalse(DungeonTimerState.extraStats(chat), chat)
+    }
+
+    @Test
     fun `clear boundaries preserve real time and lag adjusted seconds separately`() {
         val s = state()
         s.chat(DungeonTimerState.START, stamp(0))
