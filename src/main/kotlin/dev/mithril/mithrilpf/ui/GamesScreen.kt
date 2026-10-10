@@ -310,10 +310,9 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
         g.text(font, count, countX, layout.top + 6, Palette.MUTED, false)
         headers(g)
         val tooltip = rows(g, day, mouseX, mouseY) ?: headerTooltip(mouseX, mouseY)
-        when {
-            day.finished -> card(g, day)
-            else -> status(g, statusLine(day, mouseX, mouseY), statusColor())
-        }
+        // After the reset, the Load button takes the result card's place.
+        if (day.finished && !games.newDay) card(g, day)
+        else status(g, statusLine(day, mouseX, mouseY), statusColor())
         return tooltip
     }
 
@@ -525,8 +524,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
                     val rate = if (it.played == 0) 0 else it.solved * 100 / it.played
                     text("played", it.played, rate) to Palette.MUTED
                 },
-                (if (games.newDay) text("new_day") else text("next_in", countdown(day))) to
-                    Palette.MUTED,
+                text("next_in", countdown(day)) to Palette.MUTED,
             )
         val textX = x + 34 + nameWidth + 12
         val room = x + w - 118 - textX
