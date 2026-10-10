@@ -236,8 +236,9 @@ object DungeonTimers {
         score.sidebar(cleaned)
     }
 
+    // Shown in chat even when the failure happens outside a world.
     private fun notice(key: String) =
-        Minecraft.getInstance().player?.sendSystemMessage(message(key))
+        Minecraft.getInstance().gui.chat.addClientSystemMessage(message(key))
 
     private fun tick(client: Minecraft) {
         if (world !== client.level) reset()

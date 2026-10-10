@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
  */
 class TrackingStorage(
     private val directory: Path,
-    private val notify: (String) -> Unit = {},
+    private val notify: (String) -> Unit,
     private val publish: (() -> Unit) -> Unit,
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger("MithrilPF tracking")

@@ -20,7 +20,7 @@ class TrackingStorageTest {
     @Test
     fun `worker snapshots publish only on caller thread and persist independently per category`() {
         val desired = TrackingSettings(ticks = true, tablePosition = HudPosition(scale = 3.5))
-        TrackingStorage(directory, publish = publications::add).use { store ->
+        TrackingStorage(directory, {}, publications::add).use { store ->
             store.load { assertEquals(TrackingSettings(), it) }
             assertFalse(store.ready)
             publishNext()
@@ -59,7 +59,7 @@ class TrackingStorageTest {
             assertTrue(store.records["rooms"].orEmpty().isEmpty())
             assertTrue(store.records["solo"].orEmpty().isEmpty())
         }
-        TrackingStorage(directory, publish = publications::add).use { store ->
+        TrackingStorage(directory, {}, publications::add).use { store ->
             store.load { assertEquals(desired, it) }
             publishNext()
             assertEquals(
@@ -74,7 +74,7 @@ class TrackingStorageTest {
     fun `failed loading preserves bad config and prevents writes`() {
         val file = directory.resolve("tracking.json")
         Files.writeString(file, "bad config")
-        TrackingStorage(directory, publish = publications::add).use { store ->
+        TrackingStorage(directory, {}, publications::add).use { store ->
             store.load { fail("Invalid configuration must not publish defaults") }
             publishNext()
             assertTrue(store.error)
@@ -128,7 +128,7 @@ class TrackingStorageTest {
             assertEquals(SplitTime(22000, 400), changed["Blood Open"])
             assertEquals(1, store.saveFailures)
         }
-        TrackingStorage(directory, publish = publications::add).use { store ->
+        TrackingStorage(directory, {}, publications::add).use { store ->
             store.load {}
             publishNext()
             assertEquals(
