@@ -16,10 +16,6 @@ class SplitPbResultTest {
             "Local records · Not uploaded",
             strings.getValue("tracking.mithrilpf.local_only").jsonPrimitive.content,
         )
-        assertEquals(
-            "MithrilPF — personal bests",
-            strings.getValue("tracking.mithrilpf.records").jsonPrimitive.content,
-        )
     }
 
     @Test

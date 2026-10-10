@@ -14,6 +14,9 @@ object Palette {
     val BORDER = 0xFF2A2C34.toInt()
     val ACCENT = 0xFFB4B8FF.toInt()
     val HIGHLIGHT = 0xFFD2D5FF.toInt()
+
+    /** mithril.foo's indigo, lightened to stay readable on chat; the deep end of the chat name. */
+    val BRAND = 0xFF8A8EF2.toInt()
     val TEXT = 0xFFF0F0F3.toInt()
     val MUTED = 0xFFA0A2AE.toInt()
     val SUCCESS = 0xFF8DC7AC.toInt()

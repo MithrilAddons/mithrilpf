@@ -1,7 +1,6 @@
 package dev.mithril.mithrilpf.soloroom
 
 import dev.mithril.mithrilpf.dungeontimer.DungeonBest
-import dev.mithril.mithrilpf.dungeontimer.DungeonTimeFormat
 import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.Locale
@@ -156,19 +155,6 @@ class RoomPbGate(private val host: Host) {
 
     companion object {
         private fun saved(count: Int): Component = accent(message("room_pbs_saved", count))
-
-        /**
-         * A room PB for the PB list: secrets per minute, and old clears from before styles were
-         * tracked labelled until the room has a time for both styles.
-         */
-        fun listing(name: String, best: DungeonBest, splits: Map<String, DungeonBest>): String? {
-            if (" · Secrets · " in name) return "$name: ${rate(60_000.0 / best.realMillis)}"
-            val time = DungeonTimeFormat.pair(SplitTime(best.realMillis, best.ticks))
-            if (!name.endsWith(" · Cleared")) return "$name: $time"
-            val room = name.removeSuffix(" · Cleared")
-            if (RoomStyle.entries.all { "$room · Clear · ${it.label}" in splits }) return null
-            return "$room · Clear (${message("style_unknown").string}): $time"
-        }
 
         private fun rate(perMinute: Double) = String.format(Locale.ROOT, "%.1f/min", perMinute)
 

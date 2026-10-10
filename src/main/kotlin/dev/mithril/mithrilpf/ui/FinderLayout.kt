@@ -53,6 +53,37 @@ class FinderNavigation {
     var chatParty: String? = null
     var chatDraft = ""
     var chatRequest: String? = null
+    var recordsView = RecordsView.OVERVIEW
+    /** The narrow Rooms table shows midclear PBs, or regular ones when false. */
+    var recordsMidclear = true
+    var recordsQuery = ""
+    private var recordsFloor: String? = null
+    private var playedFloor: String? = null
+
+    /** Opens Records on the PBs (Splits, unless Rooms was open), on [floor] when one is given. */
+    fun showRecords(floor: String?, lastPlayed: String?) {
+        tab = FinderTab.RECORDS
+        if (recordsView == RecordsView.OVERVIEW) recordsView = RecordsView.SPLITS
+        playedFloor = lastPlayed
+        if (floor != null) recordsFloor = floor
+    }
+
+    fun chooseRecordsFloor(floor: String) {
+        recordsFloor = floor
+    }
+
+    /**
+     * The floor Records shows: the one picked, until a different floor is played; then the floor
+     * last played, or the highest floor with PBs.
+     */
+    fun recordsFloor(lastPlayed: String?, hasPbs: (String) -> Boolean): String {
+        if (lastPlayed != null && lastPlayed != playedFloor) recordsFloor = null
+        playedFloor = lastPlayed
+        return recordsFloor
+            ?: lastPlayed
+            ?: FloorPicker.FLOORS.reversed().firstOrNull(hasPbs)
+            ?: "M7"
+    }
 
     fun forAccount(value: String) {
         if (account == value) return
@@ -68,5 +99,10 @@ class FinderNavigation {
         chatParty = null
         chatDraft = ""
         chatRequest = null
+        recordsView = RecordsView.OVERVIEW
+        recordsMidclear = true
+        recordsQuery = ""
+        recordsFloor = null
+        playedFloor = null
     }
 }

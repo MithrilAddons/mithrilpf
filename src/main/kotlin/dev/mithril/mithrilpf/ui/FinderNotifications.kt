@@ -25,10 +25,12 @@ internal fun finderNotices(client: Minecraft, notices: List<FinderNotice>) {
         )
             continue
         client.player?.sendSystemMessage(
-            Component.translatable("finder.mithrilpf.notice.${notice.kind}").withStyle {
-                it.withColor(Palette.ACCENT and 0xFFFFFF)
-                    .withClickEvent(ClickEvent.RunCommand("/mpf"))
-            }
+            ModChat.line(
+                Component.translatable("finder.mithrilpf.notice.${notice.kind}").withStyle {
+                    it.withColor(Palette.ACCENT and 0xFFFFFF)
+                        .withClickEvent(ClickEvent.RunCommand("/mpf"))
+                }
+            )
         )
         if (
             client.player != null &&

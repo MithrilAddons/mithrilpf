@@ -1,7 +1,6 @@
 package dev.mithril.mithrilpf.soloroom
 
 import dev.mithril.mithrilpf.dungeontimer.DungeonBest
-import dev.mithril.mithrilpf.dungeontimer.DungeonTimeFormat
 import dev.mithril.mithrilpf.dungeontimer.SplitTime
 import dev.mithril.mithrilpf.dungeontimer.TimerStamp
 import java.util.Optional
@@ -251,28 +250,6 @@ class RoomPbGateTest {
         override fun send(line: Component) {
             sent += line.string
         }
-    }
-
-    @Test
-    fun `the PB list shows rates and labels old clears until both styles have a time`() {
-        val best = DungeonBest(6600, 132)
-        val time = DungeonTimeFormat.pair(SplitTime(6600, 132))
-        assertEquals(
-            "A · Secrets · Regular: 9.1/min",
-            RoomPbGate.listing("A · Secrets · Regular", best, emptyMap()),
-        )
-        assertEquals("A · Total: $time", RoomPbGate.listing("A · Total", best, emptyMap()))
-        assertEquals(
-            "A · Clear (style unknown): $time",
-            RoomPbGate.listing("A · Cleared", best, mapOf("A · Clear · Regular" to best)),
-        )
-        assertNull(
-            RoomPbGate.listing(
-                "A · Cleared",
-                best,
-                mapOf("A · Clear · Regular" to best, "A · Clear · Midclear" to best),
-            )
-        )
     }
 
     companion object {

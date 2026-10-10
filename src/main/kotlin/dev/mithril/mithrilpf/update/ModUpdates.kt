@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.update
 
+import dev.mithril.mithrilpf.ui.ModChat
 import dev.mithril.mithrilpf.ui.UpdateOptInScreen
 import dev.mithril.mithrilpf.ui.UpdatePromptScreen
 import java.nio.file.Path
@@ -94,7 +95,9 @@ class ModUpdates(private val client: Minecraft, firstRun: Boolean) : AutoCloseab
                 title?.let { client.setScreen(UpdatePromptScreen(it, this)) }
             UpdatePrompts.Show.NOTICE ->
                 client.player?.sendSystemMessage(
-                    Component.translatable("update.mithrilpf.available_notice", status.version)
+                    ModChat.line(
+                        Component.translatable("update.mithrilpf.available_notice", status.version)
+                    )
                 )
             UpdatePrompts.Show.NONE -> Unit
         }

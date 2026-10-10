@@ -19,7 +19,7 @@ and included in the gameplay JAR.
    [GitHub releases](https://github.com/MithrilAddons/mithrilpf/releases), remove
    any older MithrilPF JAR from `mods`, and put the new one there. Do not install
    the sources JAR. Restart Minecraft.
-4. Open `/mpf` (or `/mithrilpf`) and choose Sign in with Minecraft to use the
+4. Open `/mpf` and choose Sign in with Minecraft to use the
    in-game finder. Settings also offers browser linking for
    [the website finder](https://mithril.foo/party-finder), with QR/link/code options.
 
@@ -51,11 +51,17 @@ Use the active game font and the shared Palette constants; no bundled fonts.
 
 ## Use and storage
 
-`/mithrilpf` (or `/mpf`) opens the menu; its Controls keybind starts unbound. Escape returns
+`/mpf` opens the menu and `/mpf help` lists every command; the menu's Controls keybind starts unbound.
+Old command names (`/mithrilpf`, `/mithrilpfchat`, `/mpfinvite`, `/mithrilpfinvite`,
+`/mithrilpfreinvite`, `/mpfgames`, `/mithrilpfpbs`, `/mithrilpfstatus`) still run when sent but
+are not registered, so tab completion and help offer only `/mpf`, `/mpc` and `/games`. Escape returns
 to the previous screen or gameplay. Mod Menu can also open the menu. Parties shows
 authenticated F7/M7 listings, eligibility, class selection, automatic matching and
 party creation. Your party contains the roster, handoff, chat and leader controls.
-Records separates eligible records from local PBs. Settings contains account controls,
+Records is the PB viewer: a floor dropdown (starting on the floor last played) and
+Overview (stats used for party requirements beside local solo/terminals PBs), Splits
+(every split PB, real time with tick time) and Rooms (room PBs by style, searchable;
+hover a time for its tick time) views, read from PBs already in memory. Settings contains account controls,
 tracking, HUD editing, match sounds, Discord and updates.
 Tab moves focus and Enter/Space activates the focused control. Content scrolls when
 it does not fit the selected GUI scale.
@@ -206,8 +212,8 @@ The first updater-enabled build must be installed manually; older releases canno
 gain this feature without an update.
 
 Dungeon tracking provides split/real-tick timers, room clear/secrets PBs, F7/M7
-solo 300-score PBs, run history and estimated finish times. `/mithrilpfpbs` shows
-bests; `/mithrilpfstatus` shows detection/storage status. The HUD editor supports
+solo 300-score PBs, run history and estimated finish times. `/mpf pbs [floor]` opens
+Records on them; `/mpf status` shows detection/storage status. The HUD editor supports
 dragging, scaling and synthetic previews without creating records. Enable the
 Paul +10 score setting before a run when applicable.
 
@@ -302,8 +308,8 @@ Party handoff uses a separate 30-day presence credential; it cannot upload recor
 or log into the browser. The mod never sends a Hypixel command on its own. While on Hypixel it
 follows your game party from Hypixel's English party lines (joins, leaves, removals, transfers,
 disbands and "You'll be partying with"); this state is not saved across launches. Once all five
-are online, the leader opens chat and clicks anywhere (or uses `/mpfinvite`, also
-`/mithrilpfinvite`/`/mithrilpfreinvite`, or the finder screen's button). The click reports the
+are online, the leader opens chat and clicks anywhere (or uses `/mpf invite`, or the
+finder screen's button). The click reports the
 tracked party and the server's answer adds one `/p name1 name2 name3 name4` for players still
 missing. When the party is unknown after a launch or reconnect, the mod asks Hypixel's Mod API
 for it (at most once a minute, only while you lead a full finder party) instead of sending a
@@ -313,8 +319,8 @@ kicks, disbands or leaves automatically. The canonical protocol
 lives in the web repository's
 [API guide](https://github.com/MithrilAddons/web/blob/main/docs/API.md).
 
-`/mpc <message>` (also `/mithrilpfchat <message>`) sends to the linked Mithril party,
-including its website members. Replies appear as `[Mithril Party] Name: message`.
+`/mpc <message>` (also `/mpf chat <message>`) sends to the linked Mithril party,
+including its website members. Replies appear as `MithrilPF › Party › Name: message`.
 Normal chat and `/pc` remain Hypixel-only; neither is copied to the relay. Messages
 are plain text, never gameplay commands. The existing scoped party credential is
 reused, with no new sign-in. Chat remains available after the Minecraft handoff.
@@ -328,7 +334,7 @@ are discarded, and network work runs on bounded background workers. No chat text
 or credentials are saved to mod files or explicitly logged by the mod (Minecraft
 may include displayed chat in its own normal client log).
 
-`/games` (also `/mpfgames`, or an unbound Controls keybind) opens the Games screen, a
+`/games` (also `/mpf games`, or an unbound Controls keybind) opens the Games screen, a
 separate screen from the finder. Its first game is Curator: one SkyBlock item per UTC
 day, guessed in up to ten tries from ten clue columns (rarity, type, museum, stage,
 requirements, soulbound, origin, market value, NPC price and name length). The backend

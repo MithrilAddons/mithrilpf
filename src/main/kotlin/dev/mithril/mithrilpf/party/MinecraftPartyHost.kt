@@ -1,5 +1,6 @@
 package dev.mithril.mithrilpf.party
 
+import dev.mithril.mithrilpf.ui.ModChat
 import dev.mithril.mithrilpf.ui.Palette
 import net.hypixel.modapi.HypixelModAPI
 import net.hypixel.modapi.packet.impl.serverbound.ServerboundPartyInfoPacket
@@ -39,13 +40,18 @@ internal class MinecraftPartyHost(private val client: Minecraft) : PartyHost {
         HypixelModAPI.getInstance().sendPacket(ServerboundPartyInfoPacket())
 
     override fun message(key: String) {
-        client.player?.sendSystemMessage(Component.translatable("party.mithrilpf.$key"))
+        client.player?.sendSystemMessage(
+            ModChat.line(Component.translatable("party.mithrilpf.$key"))
+        )
     }
 
     override fun chatMessage(message: PartyChatMessage) {
         client.player?.sendSystemMessage(
-            Component.translatable("chat.mithrilpf.prefix")
-                .withStyle { it.withColor(Palette.ACCENT and 0xFFFFFF) }
+            ModChat.line(
+                    Component.translatable("chat.mithrilpf.prefix").withStyle {
+                        it.withColor(Palette.MUTED and 0xFFFFFF)
+                    }
+                )
                 .append(
                     Component.literal("${message.name}: ").withStyle {
                         it.withColor(Palette.HIGHLIGHT and 0xFFFFFF)
@@ -66,6 +72,6 @@ internal class MinecraftPartyHost(private val client: Minecraft) : PartyHost {
             }
         if (retryText != null)
             message.withStyle { it.withClickEvent(ClickEvent.SuggestCommand("/mpc $retryText")) }
-        client.player?.sendSystemMessage(message)
+        client.player?.sendSystemMessage(ModChat.line(message))
     }
 }
