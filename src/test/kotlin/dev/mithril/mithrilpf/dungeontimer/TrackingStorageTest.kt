@@ -88,4 +88,51 @@ class TrackingStorageTest {
         assertEquals("bad config", Files.readString(file))
         assertFalse(Files.exists(directory.resolve("rooms")))
     }
+
+    @Test
+    fun `a failed save keeps tracking on and the next save tries again`() {
+        TrackingStorage(directory, publications::add).use { store ->
+            store.load {}
+            publishNext()
+            // A non-empty folder where the PB file belongs makes the next write fail.
+            val blocked = directory.resolve("splits/dungeon-pbs.dat")
+            Files.createDirectories(blocked)
+            Files.writeString(blocked.resolve("lock"), "x")
+            store.record(
+                "splits",
+                "synthetic",
+                "M7",
+                mapOf("Blood Open" to SplitTime(22000, 400)),
+            ) { _, _ ->
+                fail("A failed save must not report a result")
+            }
+            publishNext()
+            assertEquals(1, store.saveFailures)
+            assertFalse(store.error)
+            assertTrue(store.ready)
+            assertTrue(store.records["splits"].orEmpty().isEmpty())
+            Files.delete(blocked.resolve("lock"))
+            Files.delete(blocked)
+            var changed = emptyMap<String, SplitTime>()
+            store.record(
+                "splits",
+                "synthetic",
+                "M7",
+                mapOf("Blood Open" to SplitTime(22000, 400)),
+            ) { _, result ->
+                changed = result
+            }
+            publishNext()
+            assertEquals(SplitTime(22000, 400), changed["Blood Open"])
+            assertEquals(1, store.saveFailures)
+        }
+        TrackingStorage(directory, publications::add).use { store ->
+            store.load {}
+            publishNext()
+            assertEquals(
+                DungeonBest(22000, 400),
+                store.records["splits"]?.get("synthetic")?.get("M7")?.get("Blood Open"),
+            )
+        }
+    }
 }

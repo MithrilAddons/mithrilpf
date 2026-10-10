@@ -62,6 +62,7 @@ object DungeonTimers {
     private val recordCapture = RecordCapture()
     private val teleportItem = TeleportItem()
     private const val BOSS_ENTRY = "Boss Entry"
+    private var saveFailuresShown = 0
 
     fun pollSyncEvent(): RecordEvent? = recordCapture.poll()
 
@@ -241,6 +242,10 @@ object DungeonTimers {
         if (storage.error && client.player != null && !errorShown) {
             errorShown = true
             client.player?.sendSystemMessage(message("storage_error"))
+        }
+        if (storage.saveFailures > saveFailuresShown && client.player != null) {
+            saveFailuresShown = storage.saveFailures
+            client.player?.sendSystemMessage(message("save_error"))
         }
         if (client.level == null || !settings.enabled || !ready) return
         if (!onHypixel(client)) {
@@ -457,7 +462,7 @@ object DungeonTimers {
                 solo?.invalidate("left")
             }
         }
-        if (text.contains("EXTRA STATS")) {
+        if (DungeonTimerState.extraStats(text)) {
             capture = null
             if (state?.ended != true) state = null
             rooms?.invalidate()

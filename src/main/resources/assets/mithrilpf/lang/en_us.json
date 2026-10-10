@@ -104,6 +104,7 @@
   "tracking.mithrilpf.edit_hint": "Drag to move · Scroll to scale · Escape to save",
   "tracking.mithrilpf.local_only": "Local records · Not uploaded",
   "tracking.mithrilpf.storage_error": "Tracking storage unavailable. Check the log.",
+  "tracking.mithrilpf.save_error": "A run or setting couldn't be saved. Tracking continues and the next save tries again; check the log.",
   "tracking.mithrilpf.records": "MithrilPF — personal bests",
   "tracking.mithrilpf.status": "Floor: %s · Packets: %s · Ticks: %s · Solo: %s · Score: %s · Storage: %s",
   "tracking.mithrilpf.solo_pb": "Solo Clear PB!",

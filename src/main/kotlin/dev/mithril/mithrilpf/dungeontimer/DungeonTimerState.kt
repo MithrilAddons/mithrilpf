@@ -112,6 +112,11 @@ class DungeonTimerState(val floor: String, private val definitions: List<Dungeon
 
         fun clean(text: String): String = text.replace(FORMATTING, "")
 
+        private val EXTRA_STATS = Regex("""\s*> EXTRA STATS <\s*""")
+
+        /** Hypixel's centred end-of-run line only; players can type these words in chat. */
+        fun extraStats(text: String) = EXTRA_STATS.matches(text)
+
         fun detectFloor(lines: List<String>): String? = lines.firstNotNullOfOrNull {
             val line = clean(it).replace(Regex("[\\p{Cf}]"), "").replace('\u00a0', ' ')
             if (line.contains("Queue", ignoreCase = true)) null
