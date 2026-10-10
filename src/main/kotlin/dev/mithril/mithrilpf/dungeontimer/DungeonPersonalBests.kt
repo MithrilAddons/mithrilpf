@@ -61,8 +61,26 @@ class DungeonPersonalBests(private val directory: Path) {
                 }
                 .toMap()
         if (improvements.isEmpty()) return emptyMap()
-        val updated =
+        save(
             records + (player to (records[player].orEmpty() + (floor to (previous + improvements))))
+        )
+        return completed.filterKeys { it in improvements }
+    }
+
+    /** Renames split keys; when two land on one name the better times are kept. */
+    fun rename(transform: (String) -> String) {
+        val updated = records.mapValues { (_, floors) ->
+            floors.mapValues { (_, splits) ->
+                splits.entries.groupBy({ transform(it.key) }, { it.value }).mapValues { (_, bests)
+                    ->
+                    bests.reduce { a, b -> a.improve(SplitTime(b.realMillis, b.ticks)) }
+                }
+            }
+        }
+        if (updated != records) save(updated)
+    }
+
+    private fun save(updated: Map<String, Map<String, Map<String, DungeonBest>>>) {
         val temporary = Files.createTempFile(directory, "dungeon-pbs-", ".tmp")
         try {
             Files.writeString(temporary, encode(updated, key))
@@ -80,7 +98,6 @@ class DungeonPersonalBests(private val directory: Path) {
             Files.deleteIfExists(temporary)
         }
         records = updated
-        return completed.filterKeys { it in improvements }
     }
 
     companion object {

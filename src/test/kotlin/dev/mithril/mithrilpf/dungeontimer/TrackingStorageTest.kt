@@ -154,6 +154,65 @@ class TrackingStorageTest {
     }
 
     @Test
+    fun `old solo room secrets become Total when loaded`() {
+        DungeonPersonalBests(directory.resolve("rooms")).apply {
+            load()
+            record(
+                "p",
+                "F7",
+                mapOf(
+                    "Room · Cleared" to SplitTime(1000, 20),
+                    "Room · Secrets" to SplitTime(2000, 40),
+                    "Other · Secrets" to SplitTime(3000, 50),
+                    "Other · Total" to SplitTime(2500, 60),
+                ),
+            )
+        }
+        val expected =
+            mapOf(
+                "Room · Cleared" to DungeonBest(1000, 20),
+                "Room · Total" to DungeonBest(2000, 40),
+                "Other · Total" to DungeonBest(2500, 50),
+            )
+        TrackingStorage(directory, {}, publications::add).use { store ->
+            store.load {}
+            publishNext()
+            assertEquals(expected, store.records["rooms"]?.get("p")?.get("F7"))
+        }
+        val saved = DungeonPersonalBests(directory.resolve("rooms")).apply { load() }
+        assertEquals(expected, saved.records["p"]?.get("F7"))
+    }
+
+    @Test
+    fun `room PBs are saved and reported for the player who is playing`() {
+        TrackingStorage(directory, {}, publications::add).use { store ->
+            store.load {}
+            publishNext()
+            var player: String? = "p"
+            var floor: String? = "F7"
+            val sent = mutableListOf<String>()
+            val host = RoomPbStorage({ store }, { player }, { floor }) { sent += it.string }
+            val counts = mutableListOf<Int>()
+            host.save(mapOf("Room · Total" to SplitTime(1000, 20)), counts::add)
+            publishNext()
+            assertEquals(listOf(1), counts)
+            assertEquals(mapOf("Room · Total" to DungeonBest(1000, 20)), host.best())
+            host.save(mapOf("Room · Total" to SplitTime(900, 30)), counts::add)
+            player = "someone else"
+            publishNext()
+            assertEquals(listOf(1), counts)
+            player = null
+            host.save(mapOf("Room · Total" to SplitTime(800, 10)), counts::add)
+            player = "p"
+            floor = null
+            host.save(mapOf("Room · Total" to SplitTime(800, 10)), counts::add)
+            assertTrue(publications.isEmpty())
+            host.send(net.minecraft.network.chat.Component.literal("hello"))
+            assertEquals(listOf("hello"), sent)
+        }
+    }
+
+    @Test
     fun `saved runs update the statistics`() {
         val player = java.util.UUID(0, 1).toString()
         val times =
