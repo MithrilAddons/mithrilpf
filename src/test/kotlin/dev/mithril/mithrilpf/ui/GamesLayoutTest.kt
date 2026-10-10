@@ -41,6 +41,16 @@ class GamesLayoutTest {
     }
 
     @Test
+    fun `a finished round's rows stay clear of the Load new item button`() {
+        for ((width, height) in listOf(640 to 360, 960 to 540, 427 to 240)) {
+            val layout = GamesLayout.fit(width, height)
+            val lastRowEnd = layout.rowY(layout.visibleRows(finished = true) - 1) + 16
+            assertTrue(lastRowEnd <= layout.inputY, "$width x $height")
+            assertTrue(layout.inputY + 20 <= layout.statusY, "$width x $height")
+        }
+    }
+
+    @Test
     fun `tiny windows still show a row`() {
         val layout = GamesLayout.fit(100, 80)
         assertEquals(1, layout.visibleRows(finished = true))
