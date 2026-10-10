@@ -51,6 +51,48 @@ class GamesLayoutTest {
     }
 
     @Test
+    fun `the result card's stats always have room beside the copy button`() {
+        // GUI scale 4 at 1280x960 gives the narrowest window, 320 wide.
+        val smallest = GamesLayout.fit(320, 240)
+        assertFalse(smallest.cardSplit)
+        assertEquals(34, smallest.cardTextX)
+        assertEquals(136, smallest.cardTextWidth)
+        val narrow = GamesLayout.fit(427, 240)
+        assertTrue(narrow.cardSplit)
+        assertEquals(121, narrow.cardTextWidth)
+        for ((width, height) in listOf(320 to 240, 427 to 240, 640 to 360, 960 to 540)) {
+            val layout = GamesLayout.fit(width, height)
+            assertTrue(layout.cardTextWidth >= 120, "$width x $height")
+            assertTrue(
+                layout.cardTextX + layout.cardTextWidth + layout.copyWidth + 18 <= layout.pageWidth
+            )
+        }
+    }
+
+    @Test
+    fun `the leaderboard keeps your own row on screen and above the status line`() {
+        for ((width, height) in listOf(320 to 240, 533 to 300, 640 to 333, 640 to 360)) {
+            val layout = GamesLayout.fit(width, height)
+            val rows = layout.board(10, you = true)
+            assertTrue(rows.you)
+            val used = rows.top + (if (rows.gap) 1 else 0) + 1
+            assertTrue(used <= layout.boardRows, "$width x $height")
+            assertTrue(layout.rowY(used - 1) + 16 <= layout.statusY, "$width x $height")
+            // The heading stops before the Today and Leaderboard buttons.
+            assertEquals(layout.pageWidth - 152, layout.headingWidth)
+        }
+        val smallest = GamesLayout.fit(320, 240)
+        assertEquals(6, smallest.boardRows)
+        assertEquals(GamesLayout.BoardRows(4, gap = true, you = true), smallest.board(5, true))
+        assertEquals(GamesLayout.BoardRows(6, gap = false, you = false), smallest.board(10, false))
+        assertEquals(GamesLayout.BoardRows(0, gap = false, you = true), smallest.board(0, true))
+        val tiny = GamesLayout.fit(100, 80)
+        assertEquals(1, tiny.boardRows)
+        assertEquals(GamesLayout.BoardRows(0, gap = false, you = true), tiny.board(3, true))
+        assertEquals(0, tiny.headingWidth)
+    }
+
+    @Test
     fun `tiny windows still show a row`() {
         val layout = GamesLayout.fit(100, 80)
         assertEquals(1, layout.visibleRows(finished = true))
