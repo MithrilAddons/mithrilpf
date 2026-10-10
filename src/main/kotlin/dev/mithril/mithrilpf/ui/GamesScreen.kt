@@ -270,7 +270,7 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
         mouseY: Int,
         delta: Float,
     ) {
-        g.fill(0, 0, width, height, 0xC0101114.toInt())
+        g.fill(0, 0, width, height, Palette.SCRIM)
         val p = layout.panel
         g.fill(p.x, p.y, p.x + p.width, p.y + p.height, Palette.BORDER)
         g.fill(p.x + 1, p.y + 1, p.x + p.width - 1, p.y + p.height - 1, Palette.BACKGROUND)

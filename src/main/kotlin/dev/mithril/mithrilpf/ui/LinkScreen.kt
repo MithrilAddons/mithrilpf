@@ -75,6 +75,12 @@ class LinkScreen(private val parent: Screen, private val link: BrowserLink) :
 
     private fun updateButtons() {
         val state = options()
+        // A link that finishes while other devices are shown goes back to the simple view.
+        if (expanded && !state.canExpand) {
+            expanded = false
+            rebuildWidgets()
+            return
+        }
         // Other devices need a pending link; without one the toggle does nothing.
         alternatives.active = state.canExpand
         primary.active =

@@ -6,6 +6,9 @@ object Palette {
 
     /** BACKGROUND at 75% opacity, behind full-screen panels. */
     val SCRIM = 0xC0101114.toInt()
+
+    /** Black at about half opacity, so the game stays visible behind the HUD editor. */
+    val DIM = 0x88000000.toInt()
     val SURFACE = 0xFF17181D.toInt()
     val SURFACE_RAISED = 0xFF1E2027.toInt()
     val BORDER = 0xFF2A2C34.toInt()

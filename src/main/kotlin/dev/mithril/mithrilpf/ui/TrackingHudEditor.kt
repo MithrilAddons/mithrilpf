@@ -28,7 +28,7 @@ class TrackingHudEditor(private val parent: Screen?) : Screen(DungeonTimers.mess
         mouseY: Int,
         delta: Float,
     ) {
-        g.fill(0, 0, width, height, 0x88000000.toInt())
+        g.fill(0, 0, width, height, Palette.DIM)
         g.text(font, DungeonTimers.message("edit_hint"), 8, 8, Palette.TEXT, false)
         DungeonTimerHud.Kind.entries.forEach { kind ->
             val pos = DungeonTimerHud.position(kind, draft)
