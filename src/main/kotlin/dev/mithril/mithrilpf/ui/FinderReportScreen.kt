@@ -59,6 +59,8 @@ class FinderReportScreen(
                             addProperty("reason", reason.trim())
                         },
                     ) { success ->
+                        // The player may have left this screen while the report was sending.
+                        if (minecraft.screen !== this) return@action
                         if (success) minecraft.setScreen(parent)
                         else {
                             failed = true
