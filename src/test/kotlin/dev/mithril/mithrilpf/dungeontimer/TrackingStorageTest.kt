@@ -152,4 +152,33 @@ class TrackingStorageTest {
         assertFalse(store.error)
         assertTrue(store.ready)
     }
+
+    @Test
+    fun `saved runs update the statistics`() {
+        val player = java.util.UUID(0, 1).toString()
+        val times =
+            mapOf(
+                "Blood Open" to SplitTime(10_000, 200),
+                "Watcher Clear" to SplitTime(20_000, 400),
+                "Total" to SplitTime(100_000, 2000),
+            )
+        val run =
+            DungeonRunRecord(
+                java.util.UUID.randomUUID().toString(),
+                player,
+                "E",
+                1,
+                times,
+                times,
+                0,
+            )
+        TrackingStorage(directory, {}, publications::add).use { store ->
+            store.load {}
+            publishNext()
+            store.append(run)
+            publishNext()
+            assertEquals(setOf(player), store.statistics.keys)
+        }
+        assertTrue(Files.exists(directory.resolve("runs/${run.id}.json")))
+    }
 }
