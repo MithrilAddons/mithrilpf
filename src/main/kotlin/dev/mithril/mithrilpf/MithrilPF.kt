@@ -1,7 +1,6 @@
 package dev.mithril.mithrilpf
 
 import com.mojang.blaze3d.platform.InputConstants
-import com.mojang.brigadier.arguments.StringArgumentType
 import dev.mithril.mithrilpf.account.BrowserLink
 import dev.mithril.mithrilpf.account.NativeAccount
 import dev.mithril.mithrilpf.discord.DiscordActivityModel
@@ -14,18 +13,18 @@ import dev.mithril.mithrilpf.party.PartyClient
 import dev.mithril.mithrilpf.sync.RecordSync
 import dev.mithril.mithrilpf.ui.FinderNavigation
 import dev.mithril.mithrilpf.ui.GamesScreen
+import dev.mithril.mithrilpf.ui.ModChat
 import dev.mithril.mithrilpf.ui.PartyFinderScreen
 import dev.mithril.mithrilpf.update.ModUpdates
 import java.nio.file.Files
 import java.util.UUID
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents
 import net.fabricmc.loader.api.FabricLoader
@@ -97,51 +96,39 @@ object MithrilPF : ClientModInitializer {
         }
     }
 
-    /** Chat, invite, finder and games commands. */
+    /** Chat, invite, finder, records and games commands. */
     private fun registerCommands(client: Minecraft) {
-        ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
-            for (name in listOf("mpc", "mithrilpfchat")) dispatcher.register(
-                literal(name)
-                    .executes {
-                        client.player?.sendSystemMessage(
-                            Component.translatable("chat.mithrilpf.help")
-                        )
-                        1
-                    }
-                    .then(
-                        argument("message", StringArgumentType.greedyString()).executes {
-                            parties.sendChat(StringArgumentType.getString(it, "message"))
-                            1
-                        }
-                    )
-            )
-            for (name in listOf("mpfinvite", "mithrilpfinvite", "mithrilpfreinvite")) dispatcher
-                .register(
-                    literal(name).executes {
-                        parties.invite()
-                        1
-                    }
-                )
-            dispatcher.register(
-                literal("mithrilpf").executes {
+        val actions =
+            object : ModActions {
+                override fun open() {
                     openRequested = true
-                    1
                 }
-            )
-            dispatcher.register(
-                literal("mpf").executes {
+
+                override fun records(floor: String?) {
+                    finderNavigation.forAccount(client.user.profileId.toString())
+                    finderNavigation.showRecords(floor, DungeonTimers.lastFloor)
                     openRequested = true
-                    1
                 }
-            )
-            // /mpfgames stays available if another mod or server claims /games.
-            for (name in listOf("games", "mpfgames")) dispatcher.register(
-                literal(name).executes {
+
+                override fun status() = DungeonTimers.statusMessage()
+
+                override fun invite() = parties.invite()
+
+                override fun chat(message: String) = parties.sendChat(message)
+
+                override fun games() {
                     gamesRequested = true
-                    1
                 }
-            )
+
+                override fun reply(message: Component) {
+                    client.player?.sendSystemMessage(ModChat.line(message))
+                }
+            }
+        ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
+            ModCommands.register(dispatcher, actions)
         }
+        // Old names run here instead of being registered, so tab completion only offers /mpf.
+        ClientSendMessageEvents.ALLOW_COMMAND.register { !ModCommands.legacy(it, actions) }
     }
 
     override fun onInitializeClient() {

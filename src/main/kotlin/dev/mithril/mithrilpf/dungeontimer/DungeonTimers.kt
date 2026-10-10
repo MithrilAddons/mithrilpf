@@ -12,10 +12,9 @@ import dev.mithril.mithrilpf.sync.RecordCapture
 import dev.mithril.mithrilpf.sync.RecordEvent
 import dev.mithril.mithrilpf.sync.RecordSnapshot
 import dev.mithril.mithrilpf.sync.observePlayers
+import dev.mithril.mithrilpf.ui.ModChat
 import dev.mithril.mithrilpf.ui.Palette
 import java.util.UUID
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -62,7 +61,7 @@ object DungeonTimers {
             { Minecraft.getInstance().player?.uuid?.toString() },
             { floor },
         ) {
-            Minecraft.getInstance().player?.sendSystemMessage(it)
+            Minecraft.getInstance().player?.sendSystemMessage(ModChat.line(it))
         }
     private var roomGate = RoomPbGate(roomHost)
     private var solo: SoloClearState? = null
@@ -98,6 +97,10 @@ object DungeonTimers {
     val inDungeon
         get() = location.inDungeon
 
+    /** The dungeon floor seen most recently this session, kept after you leave it. */
+    var lastFloor: String? = null
+        private set
+
     private val bounds =
         listOf(
             AABB(-72.0, 55.0, -40.0, -14.0, 146.0, 49.0),
@@ -127,48 +130,28 @@ object DungeonTimers {
         ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register { _, _ -> reset() }
         ClientPlayConnectionEvents.DISCONNECT.register { _, _ -> reset() }
         ClientLifecycleEvents.CLIENT_STOPPING.register { storage.close() }
-        ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
-            dispatcher.register(
-                literal("mithrilpfpbs").executes { ctx ->
-                    val player = client.player?.uuid?.toString()
-                    ctx.source.sendFeedback(message("records"))
-                    storage.records.forEach { (kind, players) ->
-                        players[player].orEmpty().toSortedMap().forEach { (floor, splits) ->
-                            splits.forEach { (name, best) ->
-                                val text =
-                                    if (kind == "rooms") RoomPbGate.listing(name, best, splits)
-                                    else
-                                        "${splitName(name)}: ${DungeonTimeFormat.pair(SplitTime(best.realMillis, best.ticks))}"
-                                text?.let {
-                                    ctx.source.sendFeedback(
-                                        Component.literal("$kind · $floor · $it")
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    1
-                }
-            )
-            dispatcher.register(
-                literal("mithrilpfstatus").executes { ctx ->
-                    ctx.source.sendFeedback(
-                        message(
-                            "status",
-                            floor ?: "—",
-                            clock.packets,
-                            ticks,
-                            solo?.status ?: "waiting",
-                            solo?.score?.toString() ?: "—",
-                            if (ready) "ready" else "unavailable",
-                        )
-                    )
-                    1
-                }
-            )
-        }
         DungeonTimerHud.register()
     }
+
+    fun statusMessage(): Component =
+        message(
+            "status",
+            floor ?: "—",
+            clock.packets,
+            ticks,
+            solo?.status ?: "waiting",
+            solo?.score?.toString() ?: "—",
+            if (ready) "ready" else "unavailable",
+        )
+
+    /** The current player's saved bests by kind, floor and name; empty until storage is ready. */
+    fun records(): Map<String, Map<String, Map<String, DungeonBest>>> {
+        val player = Minecraft.getInstance().player?.uuid?.toString() ?: return emptyMap()
+        return if (ready) storage.records.mapValues { it.value[player].orEmpty() } else emptyMap()
+    }
+
+    val splitDefinitions
+        get() = definitions
 
     fun update(value: TrackingSettings) {
         if (!ready) return
@@ -250,19 +233,20 @@ object DungeonTimers {
         val cleaned = lines.map(DungeonTimerState::clean)
         val previous = floor
         location.observe(cleaned, "raw scoreboard")
+        floor?.let { lastFloor = it }
         if (started && previous != floor) invalidate()
         score.sidebar(cleaned)
     }
 
     // Shown in chat even when the failure happens outside a world.
     private fun notice(key: String) =
-        Minecraft.getInstance().gui.chat.addClientSystemMessage(message(key))
+        Minecraft.getInstance().gui.chat.addClientSystemMessage(error(key))
 
     private fun tick(client: Minecraft) {
         if (world !== client.level) reset()
         if (storage.error && client.player != null && !errorShown) {
             errorShown = true
-            client.player?.sendSystemMessage(message("storage_error"))
+            client.player?.sendSystemMessage(error("storage_error"))
         }
         if (client.level == null || !settings.enabled || !ready) return
         if (!onHypixel(client)) {
@@ -511,13 +495,13 @@ object DungeonTimers {
         storage.record(kind, player, floor, times) { old, changed ->
             if (client.player?.uuid?.toString() != player) return@record
             changed.forEach { (name, time) ->
-                client.player?.sendSystemMessage(resultMessage(name, time, old[name]))
+                client.player?.sendSystemMessage(ModChat.line(resultMessage(name, time, old[name])))
             }
             if (kind == "solo") {
                 val time = times.getValue("300 Score")
                 if (changed.isEmpty())
                     client.player?.sendSystemMessage(
-                        resultMessage("300 Score", time, old["300 Score"])
+                        ModChat.line(resultMessage("300 Score", time, old["300 Score"]))
                     )
                 if (old["300 Score"]?.ticks?.let { time.ticks < it } != false) {
                     client.gui.setTimes(5, 80, 10)
@@ -572,6 +556,9 @@ object DungeonTimers {
             "Dragons" -> message("wither_king").string
             else -> name
         }
+
+    private fun error(key: String) =
+        ModChat.line(message(key).withStyle { it.withColor(Palette.DANGER and 0xFFFFFF) })
 
     fun message(key: String, vararg values: Any) =
         Component.translatable("tracking.mithrilpf.$key", *values)

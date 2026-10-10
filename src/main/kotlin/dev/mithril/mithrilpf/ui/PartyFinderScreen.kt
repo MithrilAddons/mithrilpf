@@ -2,26 +2,35 @@ package dev.mithril.mithrilpf.ui
 
 import dev.mithril.mithrilpf.MithrilPF
 import dev.mithril.mithrilpf.account.BrowserLink
+import dev.mithril.mithrilpf.dungeontimer.DungeonBest
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimeFormat
 import dev.mithril.mithrilpf.dungeontimer.DungeonTimers
 import dev.mithril.mithrilpf.dungeontimer.TrackingSettings
 import dev.mithril.mithrilpf.finder.DungeonRole
 import dev.mithril.mithrilpf.finder.FinderMetric
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.ComponentPath
 import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.AbstractScrollArea
+import net.minecraft.client.gui.components.AbstractWidget
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.components.MultiLineTextWidget
 import net.minecraft.client.gui.components.ScrollableLayout
 import net.minecraft.client.gui.components.events.ContainerEventHandler
 import net.minecraft.client.gui.components.events.GuiEventListener
 import net.minecraft.client.gui.layouts.LinearLayout
+import net.minecraft.client.gui.layouts.SpacerElement
+import net.minecraft.client.gui.narration.NarratedElementType
+import net.minecraft.client.gui.narration.NarrationElementOutput
 import net.minecraft.client.gui.screens.ConfirmScreen
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.input.KeyEvent
+import net.minecraft.client.input.MouseButtonEvent
 import net.minecraft.locale.Language
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.FormattedText
+import org.lwjgl.glfw.GLFW
 
 class PartyFinderScreen(
     private val parent: Screen?,
@@ -39,6 +48,9 @@ class PartyFinderScreen(
     private var viewStamp: List<Any?> = emptyList()
     private var displayedMembership: Pair<String?, Boolean?> = null to null
     private var displayedToken: String? = null
+    private var floorButton: FlatButton? = null
+    private var floorListOpen = false
+    private var floorsWithPbs = emptySet<String>()
     private val version =
         FabricLoader.getInstance()
             .getModContainer("mithrilpf")
@@ -59,6 +71,8 @@ class PartyFinderScreen(
         browserLink.show()
         bindings.clear()
         tabButtons.clear()
+        floorButton = null
+        if (navigation.tab != FinderTab.RECORDS) floorListOpen = false
         val tabs = LinearLayout.horizontal().spacing(4)
         val tabWidth = if (layout.wide) 69 else (layout.contentWidth - 12) / 4
         for (tab in FinderTab.entries) {
@@ -174,6 +188,8 @@ class PartyFinderScreen(
             finder.presetError,
             MithrilPF.nativeAccount.session,
             MithrilPF.nativeAccount.status,
+            if (navigation.tab == FinderTab.RECORDS) DungeonTimers.records() else null,
+            if (navigation.tab == FinderTab.RECORDS) MithrilPF.syncStatus else null,
         )
     }
 
@@ -216,71 +232,241 @@ class PartyFinderScreen(
         return view.build()
     }
 
-    private fun records() =
-        LinearLayout.vertical().spacing(10).apply {
-            paragraph(this, text("records.eligible"), muted = false)
-            val floors = LinearLayout.horizontal().spacing(6)
-            for (floor in listOf("F7", "M7")) {
-                floors.addChild(
-                    FlatButton(
-                        0,
-                        0,
-                        54,
-                        Component.literal(floor),
-                        primary = navigation.floor == floor,
-                    ) {
-                        navigation.floor = floor
-                        rebuildWidgets()
+    private fun records(): LinearLayout {
+        val data = RecordsData(DungeonTimers.records(), DungeonTimers.splitDefinitions)
+        val floor = navigation.recordsFloor(DungeonTimers.lastFloor, data::hasPbs)
+        floorsWithPbs = FloorPicker.FLOORS.filter(data::hasPbs).toSet()
+        val w = layout.pageWidth
+        val view = navigation.recordsView
+        return LinearLayout.vertical().spacing(8).apply {
+            val controls = addChild(LinearLayout.horizontal().spacing(6))
+            floorButton =
+                controls.addChild(
+                    FlatButton(0, 0, FLOOR_BUTTON, floorLabel(floor)) {
+                        floorListOpen = !floorListOpen
+                        floorButton?.message = floorLabel(floor)
                     }
                 )
+            val views = addChild(LinearLayout.horizontal().spacing(4))
+            for (option in RecordsView.entries) views.addChild(
+                FlatButton(0, 0, 72, text("records.view.${option.key}"), option == view) {
+                    navigation.recordsView = option
+                    rebuildWidgets()
+                }
+            )
+            when (view) {
+                RecordsView.OVERVIEW -> overview(this, floor, data)
+                RecordsView.SPLITS -> {
+                    addChild(
+                        SplitTable(w, data.splits(floor), w >= SplitTable.MIN_COLUMNS) { row ->
+                            if (row.kind == SplitKind.SOLO) text("records.solo_300")
+                            else Component.literal(DungeonTimers.splitName(row.name))
+                        }
+                    )
+                    paragraph(this, text("records.splits_note"))
+                }
+                RecordsView.ROOMS -> rooms(this, controls, floor, data)
             }
-            addChild(floors)
-            for (metric in FinderMetric.entries.filter { it != FinderMetric.CLASS }) dynamic(
-                this,
-                muted = false,
-            ) {
-                text(
-                    "records.value",
-                    text("metric.${metric.key}"),
-                    Component.literal(
-                        metricText(
-                            metric,
-                            MithrilPF.finder.state
-                                ?.stats
-                                ?.value(metric, DungeonRole.MAGE, navigation.floor),
-                        )
-                    ),
-                )
+        }
+    }
+
+    private fun shownFloor() =
+        navigation.recordsFloor(DungeonTimers.lastFloor) { it in floorsWithPbs }
+
+    private fun floorLabel(floor: String = shownFloor()) =
+        text("records.floor", floor).append(if (floorListOpen) " ▴" else " ▾")
+
+    private fun overview(page: LinearLayout, floor: String, data: RecordsData) {
+        val cards =
+            page.addChild(
+                if (layout.wide) LinearLayout.horizontal().spacing(12)
+                else LinearLayout.vertical().spacing(8)
+            )
+        val w = layout.columnWidth
+        val stats = MithrilPF.finder.state?.stats
+        val classes =
+            DungeonRole.entries.joinToString(" · ") {
+                "${it.short} ${metricText(FinderMetric.CLASS, stats?.roles?.get(it))}"
             }
-            val roles = addChild(LinearLayout.horizontal().spacing(4))
-            for (role in DungeonRole.entries) {
-                dynamic(roles, (layout.pageWidth - 16) / 5) {
-                    Component.literal(
-                        "${role.short}: ${metricText(FinderMetric.CLASS, MithrilPF.finder.state?.stats?.roles?.get(role))}"
+        val metrics =
+            FinderMetric.entries
+                .filter { it != FinderMetric.CLASS }
+                .map {
+                    CardLine.Value(
+                        text("metric.${it.key}"),
+                        Component.literal(
+                            metricText(it, stats?.value(it, DungeonRole.MAGE, floor))
+                        ),
                     )
                 }
+        cards.addChild(
+            RecordsCard(
+                w,
+                listOf(
+                    CardLine.Heading(text("records.eligible"), text("records.eligible_from")),
+                    CardLine.Rule,
+                ) +
+                    metrics +
+                    listOf(
+                        CardLine.Rule,
+                        CardLine.Value(text("metric.class_level"), Component.literal(classes)),
+                        CardLine.Text(
+                            if (floor == "F7" || floor == "M7") text("records.requirement_floors")
+                            else text("records.no_requirements", floor)
+                        ),
+                    ),
+            )
+        )
+        fun local(best: DungeonBest?): Component =
+            when {
+                !DungeonTimers.ready -> text("records.unavailable")
+                best == null -> Component.literal("—")
+                else -> DungeonTimeFormat.styledPair(RecordsData.time(best), Palette.TEXT)
             }
-            paragraph(this, text("records.local"), muted = false)
-            for (kind in listOf("solo_clear", "terminals")) dynamic(this, muted = false) {
-                val best =
-                    DungeonTimers.syncSnapshot(account).records.firstOrNull {
-                        it.floor == navigation.floor && it.kind == kind
-                    }
-                text(
-                    "records.value",
-                    text("records.$kind"),
-                    when {
-                        !DungeonTimers.ready -> text("records.unavailable")
-                        best != null -> Component.literal(DungeonTimeFormat.millis(best.realMillis))
-                        else -> text("records.empty")
-                    },
-                )
-            }
-            dynamic(this) {
-                Component.translatable("screen.mithrilpf.sync.${MithrilPF.syncStatus}")
-            }
-            paragraph(this, text("records.local_help"))
+        cards.addChild(
+            RecordsCard(
+                w,
+                listOf(
+                    CardLine.Heading(text("records.local"), text("records.local_from")),
+                    CardLine.Rule,
+                    CardLine.Value(
+                        text("records.solo_clear"),
+                        local(data.best("solo", floor, RecordsData.SOLO)),
+                    ),
+                    CardLine.Value(
+                        text("records.terminals"),
+                        local(data.best("splits", floor, "Terminals")),
+                    ),
+                    CardLine.Rule,
+                    CardLine.Text(
+                        Component.translatable("screen.mithrilpf.sync.${MithrilPF.syncStatus}"),
+                        if (MithrilPF.syncStatus == "synced") Palette.SUCCESS else Palette.MUTED,
+                    ),
+                    CardLine.Text(text("records.local_help")),
+                    CardLine.Text(text("records.more"), Palette.ACCENT),
+                ),
+            )
+        )
+    }
+
+    private fun rooms(
+        page: LinearLayout,
+        controls: LinearLayout,
+        floor: String,
+        data: RecordsData,
+    ) {
+        val w = layout.pageWidth
+        val columns = RoomColumns.fit(w)
+        val searchWidth = minOf(184, w - FLOOR_BUTTON - 12)
+        controls.addChild(
+            SpacerElement.width((w - FLOOR_BUTTON - searchWidth - 12).coerceAtLeast(0))
+        )
+        val search = controls.addChild(EditBox(font, searchWidth, 20, text("records.search")))
+        if (!columns.both) {
+            val styles = page.addChild(LinearLayout.horizontal().spacing(4))
+            for (midclear in listOf(true, false)) styles.addChild(
+                FlatButton(
+                    0,
+                    0,
+                    72,
+                    text(if (midclear) "records.column.midclear" else "records.column.regular"),
+                    navigation.recordsMidclear == midclear,
+                ) {
+                    navigation.recordsMidclear = midclear
+                    rebuildPreservingScroll()
+                }
+            )
         }
+        val table =
+            page.addChild(
+                RoomTable(
+                    w,
+                    columns,
+                    navigation.recordsMidclear,
+                    data.rooms(floor, navigation.recordsQuery),
+                    {
+                        if (navigation.recordsQuery.isBlank()) text("records.no_rooms", floor)
+                        else text("records.no_match")
+                    },
+                ) {
+                    !floorListOpen
+                }
+            )
+        paragraph(page, text("records.rooms_note"))
+        search.setMaxLength(32)
+        search.setHint(
+            text("records.search").withStyle { it.withColor(Palette.MUTED and 0xFFFFFF) }
+        )
+        search.value = navigation.recordsQuery
+        search.setResponder {
+            navigation.recordsQuery = it
+            table.rows = data.rooms(floor, it)
+            scroll.arrangeElements()
+        }
+    }
+
+    /** The open floor list, drawn over the page below (or above) the floor button. */
+    private fun floorList(g: GuiGraphicsExtractor, mouseX: Int, mouseY: Int) {
+        val button = floorButton ?: return
+        val picker = FloorPicker.below(button.x, button.y, button.height, height)
+        val shown = shownFloor()
+        g.nextStratum()
+        val right = picker.x + FloorPicker.WIDTH
+        val bottom = picker.y + FloorPicker.HEIGHT
+        g.fill(picker.x, picker.y, right, bottom, Palette.BORDER)
+        g.fill(picker.x + 1, picker.y + 1, right - 1, bottom - 1, Palette.SURFACE_RAISED)
+        g.fill(picker.x + 6, picker.y + 22, right - 6, picker.y + 23, Palette.BORDER)
+        val headerY = picker.y + FloorPicker.HEADERS
+        val column = (FloorPicker.WIDTH - 12) / 2
+        g.text(font, text("records.catacombs"), picker.x + 8, headerY, Palette.MUTED, false)
+        g.text(font, text("records.master"), picker.x + 12 + column, headerY, Palette.MUTED, false)
+        val hovered = picker.floorAt(mouseX.toDouble(), mouseY.toDouble())
+        for (floor in FloorPicker.FLOORS) {
+            val cell = picker.cell(floor) ?: continue
+            val selected = floor == shown
+            if (selected || floor == hovered)
+                g.fill(
+                    cell.x,
+                    cell.y + 1,
+                    cell.x + cell.width,
+                    cell.y + cell.height - 1,
+                    if (selected) Palette.PRIMARY else Palette.SECONDARY_HOVER,
+                )
+            val label = if (floor == "E") text("records.entrance") else Component.literal(floor)
+            val color =
+                when {
+                    selected -> Palette.PRIMARY_TEXT
+                    floor in floorsWithPbs -> Palette.TEXT
+                    else -> Palette.MUTED
+                }
+            val x = if (floor == "E") cell.x + (cell.width - font.width(label)) / 2 else cell.x + 4
+            g.text(font, label, x, cell.y + 4, color, false)
+        }
+    }
+
+    override fun mouseClicked(event: MouseButtonEvent, doubled: Boolean): Boolean {
+        val button = floorButton
+        if (!floorListOpen || button == null) return super.mouseClicked(event, doubled)
+        // Any click closes the list; one on a floor also picks it.
+        floorListOpen = false
+        val floor =
+            FloorPicker.below(button.x, button.y, button.height, height)
+                .floorAt(event.x(), event.y())
+        if (floor != null) {
+            navigation.chooseRecordsFloor(floor)
+            rebuildWidgets()
+        } else button.message = floorLabel()
+        return true
+    }
+
+    override fun keyPressed(event: KeyEvent): Boolean {
+        if (floorListOpen && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            floorListOpen = false
+            floorButton?.message = floorLabel()
+            return true
+        }
+        return super.keyPressed(event)
+    }
 
     private fun settings(): LinearLayout {
         val columns =
@@ -713,6 +899,7 @@ class PartyFinderScreen(
             false,
         )
         super.extractRenderState(g, mouseX, mouseY, delta)
+        if (floorListOpen) floorList(g, mouseX, mouseY)
         val errorKey =
             MithrilPF.finder.error?.let { "error.$it" }
                 ?: if (MithrilPF.finder.presetError) "editor.preset_error" else null
@@ -748,4 +935,312 @@ class PartyFinderScreen(
     }
 
     override fun isPauseScreen() = false
+}
+
+private const val FLOOR_BUTTON = 84
+
+/** One line of a Records Overview card. */
+private sealed interface CardLine {
+    data class Heading(val title: Component, val subtitle: Component) : CardLine
+
+    data object Rule : CardLine
+
+    data class Value(val label: Component, val value: Component) : CardLine
+
+    data class Text(val value: Component, val color: Int = Palette.MUTED) : CardLine
+}
+
+/** A bordered card of labelled values and wrapped notes; its height fits its lines. */
+private class RecordsCard(width: Int, private val lines: List<CardLine>) :
+    AbstractWidget(0, 0, width, 0, Component.empty()) {
+    private val font = Minecraft.getInstance().font
+    private val wrapped = lines.associateWith { line ->
+        if (line is CardLine.Text) font.split(line.value, (width - 24).coerceAtLeast(1))
+        else emptyList()
+    }
+
+    init {
+        active = false
+        height = 12 + lines.sumOf(::lineHeight)
+    }
+
+    private fun lineHeight(line: CardLine) =
+        when (line) {
+            is CardLine.Heading -> 28
+            CardLine.Rule -> 9
+            is CardLine.Value -> 14
+            is CardLine.Text -> wrapped.getValue(line).size * font.lineHeight + 6
+        }
+
+    override fun extractWidgetRenderState(
+        g: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        delta: Float,
+    ) {
+        g.fill(x, y, right, bottom, Palette.BORDER)
+        g.fill(x + 1, y + 1, right - 1, bottom - 1, Palette.SURFACE)
+        var lineY = y + 8
+        for (line in lines) {
+            when (line) {
+                is CardLine.Heading -> {
+                    g.text(font, line.title, x + 12, lineY, Palette.TEXT, false)
+                    g.text(font, line.subtitle, x + 12, lineY + 13, Palette.MUTED, false)
+                }
+                CardLine.Rule -> g.fill(x + 12, lineY + 3, right - 12, lineY + 4, Palette.BORDER)
+                is CardLine.Value -> {
+                    val valueWidth = font.width(line.value)
+                    val label = ellipsize(line.label.string, width - 36 - valueWidth, font::width)
+                    g.text(font, Component.literal(label), x + 12, lineY + 2, Palette.MUTED, false)
+                    g.text(
+                        font,
+                        line.value,
+                        right - 12 - valueWidth,
+                        lineY + 2,
+                        Palette.TEXT,
+                        false,
+                    )
+                }
+                is CardLine.Text ->
+                    wrapped.getValue(line).forEachIndexed { index, text ->
+                        g.text(
+                            font,
+                            text,
+                            x + 12,
+                            lineY + 3 + index * font.lineHeight,
+                            line.color,
+                            false,
+                        )
+                    }
+            }
+            lineY += lineHeight(line)
+        }
+    }
+
+    override fun updateWidgetNarration(output: NarrationElementOutput) {
+        output.add(
+            NarratedElementType.TITLE,
+            Component.literal(
+                lines.joinToString(". ") {
+                    when (it) {
+                        is CardLine.Heading -> it.title.string
+                        CardLine.Rule -> ""
+                        is CardLine.Value -> "${it.label.string}: ${it.value.string}"
+                        is CardLine.Text -> it.value.string
+                    }
+                }
+            ),
+        )
+    }
+}
+
+/** Every split PB for a floor, real time with the tick time in grey; two columns when wide. */
+private class SplitTable(
+    width: Int,
+    private val rows: List<SplitRow>,
+    private val twoColumns: Boolean,
+    private val label: (SplitRow) -> Component,
+) : AbstractWidget(0, 0, width, 0, Component.empty()) {
+    private val font = Minecraft.getInstance().font
+    private val perColumn = if (twoColumns) (rows.size + 1) / 2 else rows.size
+
+    init {
+        active = false
+        height = perColumn * ROW
+    }
+
+    override fun extractWidgetRenderState(
+        g: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        delta: Float,
+    ) {
+        val columnWidth = if (twoColumns) (width - 8) / 2 else width
+        rows.forEachIndexed { index, row ->
+            val column = index / perColumn.coerceAtLeast(1)
+            val line = index % perColumn.coerceAtLeast(1)
+            val left = x + column * (columnWidth + 8)
+            val top = y + line * ROW
+            if (line % 2 == 0) g.fill(left, top, left + columnWidth, top + ROW, Palette.SURFACE)
+            val value =
+                row.best?.let { DungeonTimeFormat.styledPair(RecordsData.time(it), Palette.TEXT) }
+                    ?: Component.literal("—")
+            val valueWidth = font.width(value)
+            val name = ellipsize(label(row).string, columnWidth - 24 - valueWidth, font::width)
+            val nameColor =
+                when (row.kind) {
+                    SplitKind.SOLO -> Palette.ACCENT
+                    else -> Palette.TEXT
+                }
+            g.text(font, Component.literal(name), left + 8, top + 5, nameColor, false)
+            g.text(
+                font,
+                value,
+                left + columnWidth - 8 - valueWidth,
+                top + 5,
+                if (row.best == null) Palette.MUTED else Palette.TEXT,
+                false,
+            )
+        }
+    }
+
+    override fun updateWidgetNarration(output: NarrationElementOutput) {
+        output.add(
+            NarratedElementType.TITLE,
+            Component.literal(
+                rows.joinToString(". ") {
+                    "${label(it).string}: ${it.best?.let { best -> DungeonTimeFormat.pair(RecordsData.time(best)) } ?: "—"}"
+                }
+            ),
+        )
+    }
+
+    companion object {
+        const val ROW = 18
+        const val MIN_COLUMNS = 440
+    }
+}
+
+/**
+ * Room PBs, one row per room. Times show real time; hovering a value shows its tick time. Narrow
+ * tables show one style's clear and secrets, picked by [midclear].
+ */
+private class RoomTable(
+    width: Int,
+    private val columns: RoomColumns,
+    private val midclear: Boolean,
+    rows: List<RoomRow>,
+    private val empty: () -> Component,
+    private val hover: () -> Boolean,
+) : AbstractWidget(0, 0, width, 0, Component.empty()) {
+    private val font = Minecraft.getInstance().font
+
+    var rows = rows
+        set(value) {
+            field = value
+            height = HEADER + value.size.coerceAtLeast(1) * ROW
+        }
+
+    init {
+        active = false
+        this.rows = rows
+    }
+
+    private fun headers() =
+        if (columns.both) listOf("midclear", "regular", "secrets_mid", "secrets_reg", "total")
+        else listOf("clear", "secrets", "total")
+
+    /** Each value column's text, colour and tooltip for a row. */
+    private fun cells(row: RoomRow): List<Triple<String, Int, Component?>?> {
+        fun time(best: DungeonBest?) =
+            best?.let {
+                Triple(
+                    DungeonTimeFormat.millis(it.realMillis),
+                    Palette.TEXT,
+                    finderText("records.tick_time", DungeonTimeFormat.ticks(it.ticks)),
+                )
+            } ?: DASH
+        fun rate(best: DungeonBest?) =
+            best?.let {
+                Triple(
+                    RecordsData.rate(it.realMillis),
+                    Palette.TEXT,
+                    finderText("records.tick_rate", RecordsData.rate(it.ticks * 50)),
+                )
+            } ?: DASH
+        val none = finderText(if (columns.both) "records.no_secrets" else "records.none").string
+        return if (columns.both) {
+            if (row.noSecrets)
+                listOf(
+                    DASH,
+                    time(row.regular),
+                    Triple(none, Palette.MUTED, null),
+                    null,
+                    time(row.total),
+                )
+            else
+                listOf(
+                    time(row.midclear),
+                    time(row.regular),
+                    rate(row.secretsMid),
+                    rate(row.secretsReg),
+                    time(row.total),
+                )
+        } else if (row.noSecrets)
+            listOf(time(row.regular), Triple(none, Palette.MUTED, null), time(row.total))
+        else if (midclear) listOf(time(row.midclear), rate(row.secretsMid), time(row.total))
+        else listOf(time(row.regular), rate(row.secretsReg), time(row.total))
+    }
+
+    override fun extractWidgetRenderState(
+        g: GuiGraphicsExtractor,
+        mouseX: Int,
+        mouseY: Int,
+        delta: Float,
+    ) {
+        g.text(font, finderText("records.column.room"), x + 8, y + 2, Palette.MUTED, false)
+        headers().forEachIndexed { index, key ->
+            val header = finderText("records.column.$key")
+            g.text(
+                font,
+                header,
+                x + columns.rights[index] - font.width(header),
+                y + 2,
+                Palette.MUTED,
+                false,
+            )
+        }
+        g.fill(x, y + HEADER - 3, right, y + HEADER - 2, Palette.BORDER)
+        if (rows.isEmpty()) {
+            g.text(font, empty(), x + 8, y + HEADER + 5, Palette.MUTED, false)
+            return
+        }
+        var tooltip: Component? = null
+        rows.forEachIndexed { index, row ->
+            val top = y + HEADER + index * ROW
+            if (index % 2 == 0) g.fill(x, top, right, top + ROW, Palette.SURFACE)
+            val name = ellipsize(row.name, columns.nameWidth, font::width)
+            g.text(font, Component.literal(name), x + 8, top + 5, Palette.TEXT, false)
+            cells(row).forEachIndexed { column, cell ->
+                if (cell == null) return@forEachIndexed
+                val (text, color, tip) = cell
+                val textWidth = font.width(text)
+                val left = x + columns.rights[column] - textWidth
+                g.text(font, Component.literal(text), left, top + 5, color, false)
+                if (
+                    tip != null &&
+                        isHovered &&
+                        mouseY in top until top + ROW &&
+                        mouseX in left until left + textWidth
+                )
+                    tooltip = tip
+            }
+        }
+        if (hover()) tooltip?.let { g.setTooltipForNextFrame(font, it, mouseX, mouseY) }
+    }
+
+    override fun updateWidgetNarration(output: NarrationElementOutput) {
+        output.add(
+            NarratedElementType.TITLE,
+            Component.literal(
+                if (rows.isEmpty()) empty().string
+                else
+                    rows.joinToString(". ") { row ->
+                        val values =
+                            headers().zip(cells(row)).mapNotNull { (key, cell) ->
+                                cell?.let {
+                                    "${finderText("records.column.$key").string} ${it.first}"
+                                }
+                            }
+                        "${row.name}: ${values.joinToString(", ")}"
+                    }
+            ),
+        )
+    }
+
+    companion object {
+        const val ROW = 18
+        const val HEADER = 14
+        private val DASH = Triple("—", Palette.MUTED, null as Component?)
+    }
 }

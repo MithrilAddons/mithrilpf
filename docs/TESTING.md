@@ -96,7 +96,7 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
   voids only that room's clear, a teammate present at a secret voids its secrets,
   and midclear/regular lines match the threshold. Confirm secrets and Total show
   "needs 300" until boss entry (or the solo 300 split) and are saved or dropped
-  with one line there. Compare `/mithrilpfpbs` rates and old solo room PBs.
+  with one line there. Compare the Rooms view's rates and old solo room PBs.
 - Compare solo 300-score detection against server observations with and without
   Paul; test death and teammate invalidation.
 - Complete qualifying runs and verify history, three-sample estimates and fallback.
@@ -108,14 +108,21 @@ Mojang's hashes. This exception does not apply to downloaded libraries or plugin
   leadership changes, a pre-existing party, and completion from join messages only after
   all game members join.
   Test conflicting parties, hidden chat, reconnects and backend restart.
-- Verify `/mpf` opens the same menu as `/mithrilpf`. In a linked party, exchange
+- Commands: `/mpf help` lists only the `/mpf` commands, `/mpf pbs F5` opens Records on F5,
+  `/mpf pbs F9` explains the floors, tab completion offers subcommands and floors but no
+  old names, and the old names (`/mithrilpf`, `/mithrilpfpbs`, `/mpfinvite`, `/mpfgames`…)
+  still work. Every mod chat line starts with the icon and "MithrilPF ›".
+- Records: switch floors from the dropdown (muted floors have no PBs, Escape or an outside
+  click closes it), each view at wide and 320×240 GUI sizes, room search, the narrow
+  Midclear/Regular switch and tick-time tooltips.
+- In a linked party, exchange
   `/mpc` messages with another mod client and a website/phone browser, including
   after the full party has joined Minecraft. Check one echo per send, server hops,
   logout/removal, account switches, slow requests and rate limits. Retry a failed
   send by clicking its notice. Confirm `/pc` and ordinary chat are not relayed,
   and command-looking incoming text never executes. Automated relay tests use fakes only.
 
-- Games: open `/games` and `/mpfgames` at wide and narrow GUI scales and with a
+- Games: open `/games` and `/mpf games` at wide and narrow GUI scales and with a
   resource-pack font. Check autocomplete (typing, arrows, Tab, Enter, Escape, mouse),
   rejected guesses (repeated or unknown), cell and header tooltips, the family badge,
   a solved and a failed round with the item icon, Copy result, the leaderboard with your

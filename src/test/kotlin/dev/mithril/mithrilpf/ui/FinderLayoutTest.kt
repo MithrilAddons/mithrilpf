@@ -48,4 +48,39 @@ class FinderLayoutTest {
         navigation.forAccount("synthetic-one")
         assertEquals(FinderTab.PARTIES, navigation.tab)
     }
+
+    @Test
+    fun recordsStartOnTheFloorLastPlayedUntilAnotherIsPicked() {
+        val navigation = FinderNavigation()
+        navigation.forAccount("synthetic-one")
+        assertEquals("M7", navigation.recordsFloor(null) { false })
+        assertEquals("F5", navigation.recordsFloor(null) { it == "F5" || it == "E" })
+        assertEquals("F7", navigation.recordsFloor("F7") { false })
+        navigation.chooseRecordsFloor("M3")
+        assertEquals("M3", navigation.recordsFloor("F7") { false })
+        assertEquals("M3", navigation.recordsFloor(null) { false })
+        // Playing another floor brings Records to it.
+        assertEquals("M6", navigation.recordsFloor("M6") { false })
+    }
+
+    @Test
+    fun recordsCommandOpensPbsOnTheFloorAsked() {
+        val navigation = FinderNavigation()
+        navigation.forAccount("synthetic-one")
+        navigation.showRecords("F5", "M7")
+        assertEquals(FinderTab.RECORDS, navigation.tab)
+        assertEquals(RecordsView.SPLITS, navigation.recordsView)
+        assertEquals("F5", navigation.recordsFloor("M7") { false })
+        navigation.recordsView = RecordsView.ROOMS
+        navigation.showRecords(null, "M7")
+        assertEquals(RecordsView.ROOMS, navigation.recordsView)
+        assertEquals("F5", navigation.recordsFloor("M7") { false })
+        navigation.recordsMidclear = false
+        navigation.recordsQuery = "altar"
+        navigation.forAccount("synthetic-two")
+        assertEquals(RecordsView.OVERVIEW, navigation.recordsView)
+        assertTrue(navigation.recordsMidclear)
+        assertEquals("", navigation.recordsQuery)
+        assertEquals("M7", navigation.recordsFloor(null) { false })
+    }
 }
