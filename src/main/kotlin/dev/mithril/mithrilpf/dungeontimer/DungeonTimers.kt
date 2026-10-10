@@ -62,7 +62,6 @@ object DungeonTimers {
     private val recordCapture = RecordCapture()
     private val teleportItem = TeleportItem()
     private const val BOSS_ENTRY = "Boss Entry"
-    private var saveFailuresShown = 0
 
     fun pollSyncEvent(): RecordEvent? = recordCapture.poll()
 
@@ -104,7 +103,7 @@ object DungeonTimers {
         val client = Minecraft.getInstance()
         RoomDetector.prepare()
         storage =
-            TrackingStorage(FabricLoader.getInstance().configDir.resolve("mithrilpf")) {
+            TrackingStorage(FabricLoader.getInstance().configDir.resolve("mithrilpf"), ::notice) {
                 client.execute(it)
             }
         storage.load { settings = it }
@@ -237,15 +236,14 @@ object DungeonTimers {
         score.sidebar(cleaned)
     }
 
+    private fun notice(key: String) =
+        Minecraft.getInstance().player?.sendSystemMessage(message(key))
+
     private fun tick(client: Minecraft) {
         if (world !== client.level) reset()
         if (storage.error && client.player != null && !errorShown) {
             errorShown = true
             client.player?.sendSystemMessage(message("storage_error"))
-        }
-        if (storage.saveFailures > saveFailuresShown && client.player != null) {
-            saveFailuresShown = storage.saveFailures
-            client.player?.sendSystemMessage(message("save_error"))
         }
         if (client.level == null || !settings.enabled || !ready) return
         if (!onHypixel(client)) {

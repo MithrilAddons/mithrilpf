@@ -6,9 +6,15 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 
-/** One bounded worker owns all stores. Callbacks publish through the supplied client executor. */
-class TrackingStorage(private val directory: Path, private val publish: (() -> Unit) -> Unit) :
-    AutoCloseable {
+/**
+ * One bounded worker owns all stores. Callbacks publish through the supplied client executor;
+ * [notify] receives a message key there when a save fails.
+ */
+class TrackingStorage(
+    private val directory: Path,
+    private val notify: (String) -> Unit = {},
+    private val publish: (() -> Unit) -> Unit,
+) : AutoCloseable {
     private val log = LoggerFactory.getLogger("MithrilPF tracking")
     private val worker =
         ThreadPoolExecutor(
@@ -40,7 +46,7 @@ class TrackingStorage(private val directory: Path, private val publish: (() -> U
         private set
 
     fun load(loaded: (TrackingSettings) -> Unit) =
-        submit({ error = true }) {
+        submit(::loadFailed) {
             val settings = config.load()
             for (kind in listOf("splits", "rooms", "solo")) {
                 bests[kind] = DungeonPersonalBests(directory.resolve(kind)).apply { load() }
@@ -57,7 +63,8 @@ class TrackingStorage(private val directory: Path, private val publish: (() -> U
         }
 
     fun settings(settings: TrackingSettings) {
-        if (ready && !error) submit(::saveFailed) { config.save(settings) }
+        // Only a failed load sets error, and that leaves ready false: one check covers both.
+        if (ready) submit(::saveFailed) { config.save(settings) }
     }
 
     fun record(
@@ -94,6 +101,12 @@ class TrackingStorage(private val directory: Path, private val publish: (() -> U
     // leaves them consistent and the next save simply tries again.
     private fun saveFailed() {
         saveFailures++
+        notify("save_error")
+    }
+
+    // Reported once a player is in a world; loading happens before the game starts.
+    private fun loadFailed() {
+        error = true
     }
 
     private fun submit(onFailure: () -> Unit, action: () -> Unit) {

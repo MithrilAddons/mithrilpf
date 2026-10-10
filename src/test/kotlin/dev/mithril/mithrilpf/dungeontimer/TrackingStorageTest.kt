@@ -20,7 +20,7 @@ class TrackingStorageTest {
     @Test
     fun `worker snapshots publish only on caller thread and persist independently per category`() {
         val desired = TrackingSettings(ticks = true, tablePosition = HudPosition(scale = 3.5))
-        TrackingStorage(directory, publications::add).use { store ->
+        TrackingStorage(directory, publish = publications::add).use { store ->
             store.load { assertEquals(TrackingSettings(), it) }
             assertFalse(store.ready)
             publishNext()
@@ -59,7 +59,7 @@ class TrackingStorageTest {
             assertTrue(store.records["rooms"].orEmpty().isEmpty())
             assertTrue(store.records["solo"].orEmpty().isEmpty())
         }
-        TrackingStorage(directory, publications::add).use { store ->
+        TrackingStorage(directory, publish = publications::add).use { store ->
             store.load { assertEquals(desired, it) }
             publishNext()
             assertEquals(
@@ -74,7 +74,7 @@ class TrackingStorageTest {
     fun `failed loading preserves bad config and prevents writes`() {
         val file = directory.resolve("tracking.json")
         Files.writeString(file, "bad config")
-        TrackingStorage(directory, publications::add).use { store ->
+        TrackingStorage(directory, publish = publications::add).use { store ->
             store.load { fail("Invalid configuration must not publish defaults") }
             publishNext()
             assertTrue(store.error)
@@ -91,7 +91,8 @@ class TrackingStorageTest {
 
     @Test
     fun `a failed save keeps tracking on and the next save tries again`() {
-        TrackingStorage(directory, publications::add).use { store ->
+        val notices = mutableListOf<String>()
+        TrackingStorage(directory, notices::add, publications::add).use { store ->
             store.load {}
             publishNext()
             // A non-empty folder where the PB file belongs makes the next write fail.
@@ -108,6 +109,7 @@ class TrackingStorageTest {
             }
             publishNext()
             assertEquals(1, store.saveFailures)
+            assertEquals(listOf("save_error"), notices)
             assertFalse(store.error)
             assertTrue(store.ready)
             assertTrue(store.records["splits"].orEmpty().isEmpty())
@@ -126,7 +128,7 @@ class TrackingStorageTest {
             assertEquals(SplitTime(22000, 400), changed["Blood Open"])
             assertEquals(1, store.saveFailures)
         }
-        TrackingStorage(directory, publications::add).use { store ->
+        TrackingStorage(directory, publish = publications::add).use { store ->
             store.load {}
             publishNext()
             assertEquals(
@@ -134,5 +136,20 @@ class TrackingStorageTest {
                 store.records["splits"]?.get("synthetic")?.get("M7")?.get("Blood Open"),
             )
         }
+    }
+
+    @Test
+    fun `a save the worker can't take counts as a failed save`() {
+        val notices = mutableListOf<String>()
+        val store = TrackingStorage(directory, notices::add, publications::add)
+        store.load {}
+        publishNext()
+        store.close()
+        store.settings(TrackingSettings(ticks = true))
+        publishNext()
+        assertEquals(1, store.saveFailures)
+        assertEquals(listOf("save_error"), notices)
+        assertFalse(store.error)
+        assertTrue(store.ready)
     }
 }
