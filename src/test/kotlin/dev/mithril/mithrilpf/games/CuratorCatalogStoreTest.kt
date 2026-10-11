@@ -8,7 +8,14 @@ import org.junit.rules.TemporaryFolder
 class CuratorCatalogStoreTest {
     @get:Rule val temporary = TemporaryFolder()
 
-    private val catalog = Catalog("3:1", listOf(CatalogItem("SYNTHESIZER_V3", "Synthesizer v3")))
+    private val catalog =
+        Catalog(
+            "3:1",
+            listOf(
+                CatalogItem("SYNTHESIZER_V3", "Synthesizer v3", "EPIC"),
+                CatalogItem("PAPER", "Paper"),
+            ),
+        )
 
     @Test
     fun `the item list survives a restart`() {

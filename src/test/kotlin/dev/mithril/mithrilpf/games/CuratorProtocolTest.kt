@@ -93,6 +93,27 @@ class CuratorProtocolTest {
     }
 
     @Test
+    fun `items carry their rarity when the backend sends one`() {
+        val items = """"items":[["HYPERION","Hyperion"],["PAPER","Paper"]]"""
+        val catalog =
+            CuratorProtocol.catalog(
+                """{"version":1,"catalog":"3:1:rarity",$items,"rarities":["LEGENDARY",null]}""",
+                null,
+            )
+        assertEquals(
+            listOf(CatalogItem("HYPERION", "Hyperion", "LEGENDARY"), CatalogItem("PAPER", "Paper")),
+            catalog.items,
+        )
+        for (rarities in
+            listOf("""["LEGENDARY"]""", """["legendary",null]""", """[1,null]""")) assertFails {
+            CuratorProtocol.catalog(
+                """{"version":1,"catalog":"3:1",$items,"rarities":$rarities}""",
+                null,
+            )
+        }
+    }
+
+    @Test
     fun `guess bodies name the day and the item`() {
         val body: JsonObject = CuratorProtocol.guessBody("2027-01-15", "HYPERION")
         assertEquals("""{"version":1,"day":"2027-01-15","item":"HYPERION"}""", body.toString())

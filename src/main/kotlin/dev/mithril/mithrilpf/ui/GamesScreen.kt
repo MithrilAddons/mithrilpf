@@ -744,14 +744,14 @@ class GamesScreen(private val parent: Screen?, private val games: CuratorClient)
                 if (selected) Palette.SECONDARY_HOVER else Palette.SURFACE_RAISED,
             )
             if (selected) g.fill(box.x + 1, y, box.x + 3, y + SUGGESTION, Palette.ACCENT)
-            g.text(
-                font,
-                font.plainSubstrByWidth(item.name, w - 12),
-                box.x + 6,
-                y + 3,
-                if (selected) Palette.TEXT else Palette.MUTED,
-                false,
-            )
+            // Names take their SkyBlock rarity colour, as they do in game.
+            val color =
+                when {
+                    item.rarity != null -> Palette.rarity(item.rarity)
+                    selected -> Palette.TEXT
+                    else -> Palette.MUTED
+                }
+            g.text(font, font.plainSubstrByWidth(item.name, w - 12), box.x + 6, y + 3, color, false)
         }
     }
 
