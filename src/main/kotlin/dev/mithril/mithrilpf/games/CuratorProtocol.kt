@@ -117,7 +117,8 @@ data class Leaderboard(
     val stats: SeasonStats,
 )
 
-data class CatalogItem(val id: String, val name: String)
+/** [rarity] tints the suggestion; null when the backend didn't send one. */
+data class CatalogItem(val id: String, val name: String, val rarity: String? = null)
 
 data class Catalog(val version: String, val items: List<CatalogItem>)
 
@@ -125,6 +126,7 @@ data class Catalog(val version: String, val items: List<CatalogItem>)
 object CuratorProtocol {
     private val DAY = Regex("\\d{4}-\\d{2}-\\d{2}")
     private val ITEM = Regex("[A-Za-z0-9_:;.\\-]{1,128}")
+    private val RARITY = Regex("[A-Z_]{1,32}")
 
     fun day(json: String): CuratorDay {
         val root = parse(json)
@@ -189,14 +191,22 @@ object CuratorProtocol {
         }
         val items = root.getAsJsonArray("items")
         require(items.size() <= 20000)
+        // Rarities come beside the [id, name] pairs, in the same order, from newer backends.
+        val rarities = optional(root, "rarities")?.asJsonArray
+        require(rarities == null || rarities.size() == items.size())
         return Catalog(
             version,
-            items.map {
-                val pair = it.asJsonArray
+            items.mapIndexed { index, element ->
+                val pair = element.asJsonArray
                 require(pair.size() == 2)
                 CatalogItem(
                     pair[0].asString.also { id -> require(id.matches(ITEM)) },
                     pair[1].asString.also { name -> require(name.length in 1..64) },
+                    rarities
+                        ?.get(index)
+                        ?.takeUnless { it.isJsonNull }
+                        ?.asString
+                        ?.also { rarity -> require(rarity.matches(RARITY)) },
                 )
             },
         )

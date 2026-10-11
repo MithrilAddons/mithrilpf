@@ -42,6 +42,7 @@ class CuratorCatalogStore(private val path: Path) {
                         )
                     },
                 )
+                add("rarities", JsonArray().apply { for (item in catalog.items) add(item.rarity) })
             }
         val bytes = root.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= LIMIT)
